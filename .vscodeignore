@@ -1,0 +1,9 @@
+.vscode/**
+src/**
+**/*.map
+tsconfig.json
+webpack.config.js
+data/**
+node_modules/**
+CLAUDE.md
+*.vsix
