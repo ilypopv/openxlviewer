@@ -7,7 +7,7 @@ export class CsvEditorProvider implements vscode.CustomTextEditorProvider {
 		const provider = new CsvEditorProvider(context);
 		const providerRegistration = vscode.window.registerCustomEditorProvider(CsvEditorProvider.viewType, provider, {
 			webviewOptions: {
-				enableFindWidget: true,
+				enableFindWidget: false,
 				retainContextWhenHidden: true
 			}
 		});

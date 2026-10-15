@@ -25,20 +25,22 @@ export class DocumentViewManager {
         }
     }
 
-    public find(uri: Uri): BaseDocumentView {   
-        return this._views.find(p => p.previewUri.toString() === p.webview.asWebviewUri(uri).toString());
+    // editor: true = custom editors only, false = preview panels only, undefined = either
+    public find(uri: Uri, editor?: boolean): BaseDocumentView | undefined {
+        return this.filter(uri, editor)[0];
     }
 
-    public filter(uri: Uri): BaseDocumentView[] {
-        return this._views.filter(p => p.previewUri.toString() === p.webview.asWebviewUri(uri).toString());
+    public filter(uri: Uri, editor?: boolean): BaseDocumentView[] {
+        const key = uri.toString();
+        return this._views.filter(p => !p.isDisposed && p.uri.toString() === key && (editor === undefined || p.hasCustomEditor === editor));
     }
 
-    public active(): BaseDocumentView {
-        return this._views.find(p => p.visible);
+    public active(): BaseDocumentView | undefined {
+        return this._views.find(p => !p.isDisposed && p.visible && p.focused) || this._views.find(p => !p.isDisposed && p.visible);
     }
     
     public configure(): void {
-        this._views.forEach(p => p.configure());
+        this._views.slice().forEach(p => p.configure());
     }
 }
 

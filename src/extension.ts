@@ -23,13 +23,10 @@ export function activate(context: ExtensionContext) {
                 return;
             }
         }
-        const csv = resource.with({
-            scheme: 'csv-preview'
-        });
-        let preview = documentViewManager.find(csv);
+        let preview = documentViewManager.find(resource, false);
         if (preview) {
             preview.reveal();
-            return;
+            return preview.webview;
         }
         preview = CsvDocumentView.create(context, resource, viewColumn);
         return preview.webview;
@@ -43,13 +40,10 @@ export function activate(context: ExtensionContext) {
             window.showInformationMessage("Use the explorer context menu or editor title menu to preview Excel files.");
             return;
         }
-        const excel = resource.with({
-            scheme: 'excel-preview'
-        });
-        let preview = documentViewManager.find(excel);
+        let preview = documentViewManager.find(resource, false);
         if (preview) {
             preview.reveal();
-            return;
+            return preview.webview;
         }
         preview = ExcelDocumentView.create(context, resource, viewColumn);
         return preview.webview;
@@ -67,7 +61,7 @@ export function activate(context: ExtensionContext) {
     let refreshCommand = commands.registerCommand('csv.refresh', () => {
         let preview = documentViewManager.active();
         if (preview) {
-            preview.refresh();
+            preview.userRefresh();
         }
     });
     
@@ -80,20 +74,22 @@ export function activate(context: ExtensionContext) {
     context.subscriptions.push(ExcelEditorProvider.register(context));
 
     // Register serializers for persistent settings
-    window.registerWebviewPanelSerializer("openxlviewer-csv-preview", new CsvSerializer(context));
-    window.registerWebviewPanelSerializer("openxlviewer-excel-preview", new ExcelSerializer(context));
+    context.subscriptions.push(window.registerWebviewPanelSerializer("openxlviewer-csv-preview", new CsvSerializer(context)));
+    context.subscriptions.push(window.registerWebviewPanelSerializer("openxlviewer-excel-preview", new ExcelSerializer(context)));
 
     // Reset all previews when the configuration changes
-    workspace.onDidChangeConfiguration(() => {
-        documentViewManager.configure();
-    });
+    context.subscriptions.push(workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('csv-preview')) {
+            documentViewManager.configure();
+        }
+    }));
 
     // Automatically preview content piped from stdin (when VSCode is already open)
-    workspace.onDidOpenTextDocument(document => {
+    context.subscriptions.push(workspace.onDidOpenTextDocument(document => {
         if (isStdinFile(document)) {
             commands.executeCommand('csv.preview', document.uri);
         }
-    });
+    }));
 
     // Automatically preview content piped from stdin (when VSCode first starts up)
     if (window.activeTextEditor) {

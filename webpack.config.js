@@ -25,12 +25,6 @@ const base = {
     }
 };
 
-const nodeConfig = {
-    ...base,
-    target: 'node',
-    resolve: { extensions: ['.ts', '.js'] }
-};
-
 const webConfig = {
     ...base,
     target: 'webworker',
@@ -47,4 +41,5 @@ const webConfig = {
     ]
 };
 
-module.exports = [nodeConfig, webConfig];
+// One bundle for desktop and web: the webworker build only uses workspace.fs and has no Node requires.
+module.exports = webConfig;

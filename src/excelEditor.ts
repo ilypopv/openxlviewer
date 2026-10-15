@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { Disposable, disposeAll } from './dispose';
+import { Utils } from 'vscode-uri';
 import ExcelDocumentView from './excelDocumentView';
 import { documentViewManager } from './documentViewManager';
 
@@ -9,7 +10,7 @@ export class ExcelEditorProvider implements vscode.CustomEditorProvider<ExcelDoc
 		const provider = new ExcelEditorProvider(context);
 		const providerRegistration = vscode.window.registerCustomEditorProvider(ExcelEditorProvider.viewType, provider, {
 			webviewOptions: {
-				enableFindWidget: true,
+				enableFindWidget: false,
 				retainContextWhenHidden: true
 			}
 		});
@@ -46,11 +47,22 @@ export class ExcelEditorProvider implements vscode.CustomEditorProvider<ExcelDoc
 		_token: vscode.CancellationToken
 	): Promise<ExcelDocument> {
 		const document: ExcelDocument = await ExcelDocument.create(uri, openContext.backupId, {
-			getFileData: async () => {
-				let view = documentViewManager.find(document.uri);
-				let panel = view.panel;
-				const response = await this.postMessageWithResponse<number[]>(panel, 'getData', {});
-				return new Uint8Array(response);
+			getFileData: async (token) => {
+				const view = document.lastView && !document.lastView.isDisposed
+					? document.lastView
+					: <ExcelDocumentView | undefined>documentViewManager.find(document.uri, true);
+				if (!view) {
+					throw new Error('The Excel editor is not open, so the current content is not available.');
+				}
+				return view.requestData(token);
+			},
+			documentSaved: (target) => {
+				// Read-only previews of the same file read the disk; refresh them after a save.
+				if (target.toString() === document.uri.toString()) {
+					for (const view of documentViewManager.filter(document.uri, false)) {
+						view.refresh();
+					}
+				}
 			}
 		});
 
@@ -77,16 +89,6 @@ export class ExcelEditorProvider implements vscode.CustomEditorProvider<ExcelDoc
         return document;
 	}
 
-	private _requestId = 1;
-	private readonly _callbacks = new Map<number, (response: any) => void>();
-
-	private postMessageWithResponse<R = unknown>(panel: vscode.WebviewPanel, type: string, body: any): Promise<R> {
-		const requestId = this._requestId++;
-		const p = new Promise<R>(resolve => this._callbacks.set(requestId, resolve));
-		panel.webview.postMessage({ type, requestId, body });
-		return p;
-	}
-
 	public async resolveCustomEditor(
 		document: ExcelDocument,
 		webviewPanel: vscode.WebviewPanel,
@@ -94,19 +96,26 @@ export class ExcelEditorProvider implements vscode.CustomEditorProvider<ExcelDoc
 	): Promise<void> {
         let editor = new ExcelDocumentView(this.context, document.uri);
 		editor.panel = webviewPanel;
-        editor.initialize();
 		editor.enableEditing(document);
-        webviewPanel.webview.onDidReceiveMessage((e) => {
-            if (e.response) {
-				const callback = this._callbacks.get(e.requestId);
-				callback?.(e.body);
-            }
-        });
+        editor.initialize();
 	}
 }
 
+function sameBytes(a: Uint8Array, b: Uint8Array): boolean {
+	if (a.length !== b.length) {
+		return false;
+	}
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] !== b[i]) {
+			return false;
+		}
+	}
+	return true;
+}
+
 interface ExcelDocumentDelegate {
-	getFileData(): Promise<Uint8Array>;
+	getFileData(token: vscode.CancellationToken): Promise<Uint8Array>;
+	documentSaved(target: vscode.Uri): void;
 }
 
 export class ExcelDocument extends Disposable implements vscode.CustomDocument {
@@ -145,6 +154,7 @@ export class ExcelDocument extends Disposable implements vscode.CustomDocument {
 		this._uri = uri;
 		this._documentData = initialContent;
 		this._delegate = delegate;
+		this.watch();
 	}
 
 	private readonly _onDidDispose = this._register(new vscode.EventEmitter<void>());
@@ -164,8 +174,61 @@ export class ExcelDocument extends Disposable implements vscode.CustomDocument {
 
 	public readonly onDidChange = this._onDidChange.event;
 
-	change(label: string) {
-		let view = <ExcelDocumentView>documentViewManager.find(this.uri);
+	private _lastView: ExcelDocumentView | undefined;
+	public get lastView(): ExcelDocumentView | undefined { return this._lastView; }
+
+	private _dirty = false;
+	public get dirty() { return this._dirty; }
+
+	private _watchTimer: any;
+	private _warned = false;
+
+	private watch() {
+		if (this._uri.scheme === 'untitled') {
+			return;
+		}
+		try {
+			const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(Utils.dirname(this._uri) as any, Utils.basename(this._uri)));
+			const onDisk = () => {
+				clearTimeout(this._watchTimer);
+				this._watchTimer = setTimeout(() => { this.diskChanged().catch(() => undefined); }, 300);
+			};
+			this._register(watcher);
+			this._register(watcher.onDidChange(onDisk));
+			this._register(watcher.onDidCreate(onDisk));
+			this._register({ dispose: () => clearTimeout(this._watchTimer) });
+		} catch {
+			// no watcher support (virtual file systems)
+		}
+	}
+
+	// Reloads a clean document when the file changes on disk; a dirty one only warns, it never loses edits.
+	private async diskChanged() {
+		const disk = await ExcelDocument.readFile(this._uri);
+		if (sameBytes(disk, this._documentData)) {
+			return;
+		}
+		if (!this._dirty) {
+			this._documentData = disk;
+			this._onDidChangeDocument.fire({ content: disk });
+			this._delegate.documentSaved(this._uri);
+			return;
+		}
+		if (this._warned) {
+			return;
+		}
+		this._warned = true;
+		const pick = await vscode.window.showWarningMessage(
+			`'${Utils.basename(this._uri)}' changed on disk while it has unsaved edits. Saving will overwrite the disk version.`, 'Revert to disk version');
+		this._warned = false;
+		if (pick) {
+			await vscode.commands.executeCommand('workbench.action.files.revert');
+		}
+	}
+
+	change(label: string, view: ExcelDocumentView) {
+		this._dirty = true;
+		this._lastView = view;
 		this._onDidChange.fire({
 			label: label,
 			undo: async() => view.undo(),
@@ -178,16 +241,27 @@ export class ExcelDocument extends Disposable implements vscode.CustomDocument {
 	}
 
 	async saveAs(targetResource: vscode.Uri, cancellation: vscode.CancellationToken): Promise<void> {
-		const fileData = await this._delegate.getFileData();
+		// Rejects when the webview cannot produce the bytes, so VS Code reports the failed save and keeps the document dirty.
+		const fileData = await this._delegate.getFileData(cancellation);
 		if (cancellation.isCancellationRequested) {
 			return;
 		}
+		if (!fileData || fileData.length < 4) {
+			throw new Error('Refusing to write an empty workbook.');
+		}
 		await vscode.workspace.fs.writeFile(targetResource, fileData);
+		if (targetResource.toString() === this.uri.toString()) {
+			this._dirty = false;
+		}
+		// Remember the latest working bytes: a re-created webview (or hot-exit) must not fall back to older data.
+		this._documentData = fileData;
+		this._delegate.documentSaved(targetResource);
 	}
 
 	async revert(_cancellation: vscode.CancellationToken): Promise<void> {
 		const diskContent = await ExcelDocument.readFile(this.uri);
 		this._documentData = diskContent;
+		this._dirty = false;
 		this._onDidChangeDocument.fire({
 			content: diskContent
 		});

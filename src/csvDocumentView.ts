@@ -1,13 +1,21 @@
 'use strict';
-import { window, workspace, WebviewPanel, ExtensionContext, ViewColumn, WorkspaceEdit, Range, TextDocument, Position, EndOfLine } from 'vscode';
+import { window, workspace, WebviewPanel, ExtensionContext, ViewColumn, WorkspaceEdit, TextDocument, EndOfLine, Range } from 'vscode';
 import { URI } from 'vscode-uri';
 import BaseDocumentView from './baseDocumentView';
-import { documentViewManager } from './documentViewManager';
+import { LineEdit, buildTextOps } from './csvLineEdits';
+import { safeJson, makeNonce, csp, cleanString, cleanEnum } from './html';
 
-class RowRange {
-    public start: number;
-    public end: number;
+const MAX_EDITS = 200000;
+const MAX_EDIT_CHARS = 32 * 1024 * 1024;
+
+function languageFromPath(path: string): string | undefined {
+    const m = /\.([^./\\]+)$/.exec(path);
+    const ext = m ? m[1].toLowerCase() : '';
+    return ext === 'tsv' || ext === 'tab' ? 'tsv' : ext === 'csv' ? 'csv' : undefined;
 }
+
+const INLINE_CHARS = 4 * 1024 * 1024;
+const CHUNK_CHARS = 1024 * 1024;
 
 export default class CsvDocumentView extends BaseDocumentView {
 
@@ -29,25 +37,23 @@ export default class CsvDocumentView extends BaseDocumentView {
 
     public languageId: string;
     private separator: string;
+    private _document: TextDocument;
+    private _queue: Promise<void> = Promise.resolve();
+    private _inflight = false;
+    private _seenVersions: number[] = [];
+    private _refreshTimer: any;
+    private _sendId = 0;
+    // Document version the webview is known to be in sync with (-1: unknown, edits are stale).
+    private _viewVersion = -1;
 
-	public getOptions(): any {
-        let self = this;
-		let config = workspace.getConfiguration('csv-preview');
-        let sep = <string>config.get("separator");
+    public getOptions(): any {
+        let config = workspace.getConfiguration('csv-preview');
+        let sep = cleanString(config.get("separator"), ",", 8);
         let lang = this.languageId;
         if (!lang) {
-            let editor = window.activeTextEditor;
-            if (editor && editor.document) {
-                lang = editor.document.languageId;
-                this.languageId = lang;
-            }
-        }
-        if (!lang) {
-            let document = workspace.textDocuments.find(document => {
-                return document.uri.toString() === self.uri.toString();
-            });
-            if (document) {
-                lang = document.languageId;
+            let document = workspace.textDocuments.find(d => d.uri.toString() === this.uri.toString());
+            lang = document ? document.languageId : languageFromPath(this.uri.path);
+            if (lang) {
                 this.languageId = lang;
             }
         }
@@ -56,201 +62,268 @@ export default class CsvDocumentView extends BaseDocumentView {
         } else if (lang === 'csv (semicolon)') {
             sep = ";";
         } else if (lang === 'csv (pipe)') {
-            sep = "\\|";
+            sep = "|";
         }
         if (this.separator) {
             sep = this.separator;
         }
         return {
             separator: sep,
-            languageId: lang,
-            quoteMark: <string>config.get("quoteMark"),
-            hasHeaders: <boolean>config.get("hasHeaders"),
-            capitalizeHeaders: <boolean>config.get("capitalizeHeaders"),
-            resizeColumns: <string>config.get("resizeColumns"),
-            lineNumbers: <string>config.get("lineNumbers"),
-            commentCharacter: <string>config.get("commentCharacter"),
-            skipComments: <boolean>config.get("skipComments"),
-            formatValues: <string>config.get("formatValues"),
-            numberFormat: <string>config.get("numberFormat"),
+            languageId: typeof lang === 'string' ? lang.slice(0, 64) : lang,
+            quoteMark: cleanString(config.get("quoteMark"), '"', 1),
+            hasHeaders: config.get("hasHeaders") === true,
+            capitalizeHeaders: config.get("capitalizeHeaders") === true,
+            resizeColumns: cleanEnum(config.get("resizeColumns"), ['all', 'first', 'none'], 'none'),
+            lineNumbers: cleanEnum(config.get("lineNumbers"), ['none', 'ordinal', 'source'], 'none'),
+            commentCharacter: cleanString(config.get("commentCharacter"), '#', 4),
+            skipComments: config.get("skipComments") === true,
+            formatValues: cleanEnum(config.get("formatValues"), ['always', 'never', 'unquoted'], 'always'),
+            numberFormat: cleanString(config.get("numberFormat"), '', 64, 0),
             customEditor: this.hasCustomEditor,
             uri: this.uri.toString(),
             previewUri: this.previewUri.toString(),
             state: this.state
         };
-	}
-
-    private _wsEdit: WorkspaceEdit;
-    private _document: TextDocument;
-    private _currentRange: Range;
-    private _currentRow: string[];
-
-    private editRow(row: RowRange) {
-        let options = this.getOptions();
-        let sep = options.separator;
-        let quote = options.quoteMark;
-        let offset = options.hasHeaders ? 1 : 0;
-        if (this.separator) offset++;
-
-        this._currentRange = new Range(row.start + offset, 0, row.end + offset, 0);
-        let line = this._document.getText(this._currentRange);
-        let eol = this.endOfLine();
-
-        if (line.endsWith(eol)) {
-            line = line.substring(0, line.length - eol.length);
-        }
-
-        // http://markmintoff.com/2013/03/regex-split-by-comma-not-surrounded-by-quotes/
-        let regexItems = new RegExp(`${sep}(?=(?:[^${quote}]*${quote}[^${quote}]*${quote})*[^${quote}]*$)`);
-        this._currentRow = line.split(new RegExp(regexItems));
     }
 
-    private setCellValue(row: RowRange, col: number, value: string) {
-        let options = this.getOptions();
-        let sep = options.separator;
-        let quote = options.quoteMark;
-
-        if (!this._currentRow) {
-            this.editRow(row);
-        }
-
-        let regexSeparator = new RegExp(sep);
-        let mustQuote = regexSeparator.exec(value) || value.includes("\n");
-
-        if (!mustQuote) {
-            let regexQuote = new RegExp(`^${quote}([\\S\\s]*)${quote}$`);
-            let oldValue = this._currentRow[col];
-            mustQuote = regexQuote.exec(oldValue); 
-        }
-
-        this._currentRow[col] = mustQuote ? `${quote}${value}${quote}` : value;
-    }
-
-    private deleteRows(rows: RowRange[]) {
-        let options = this.getOptions();
-        let offset = options.hasHeaders ? 1 : 0;
-        if (this.separator) offset++;
-        
-        rows.forEach((row: RowRange) => {
-            let lineRange = new Range(row.start + offset, 0, row.end + offset, 0);
-            this._wsEdit.delete(this.uri, lineRange);
-        }, this);
-    }
-
-    private singleSeparator(sep: string) {
-        let skipFirst = sep.startsWith("[") || sep.startsWith(`\\`);
-        return skipFirst ? sep.slice(1, 2) : sep;
-    }
-
-    private endOfLine() {
-        return this._document.eol === EndOfLine.CRLF ? "\r\n" : "\n"
-    }
-
-    private appendRow(columns: number) {
-        let options = this.getOptions();
-        let sep = options.separator;
-        let empty = this.singleSeparator(sep).repeat(columns - 1);
-        let row = this._document.lineCount - 1;
-        let line = this._document.lineAt(row);
-
-        this.beginEdit();
-        if (!line.isEmptyOrWhitespace) {
-            this._wsEdit.insert(this.uri, line.range.end, this.endOfLine());
-            row++;
-        }
-
-        this._currentRange = new Range(row, 0, row, 0);
-        this._currentRow = empty.split(new RegExp(sep));
-    }
-
-    private beginEdit() {
-        if (!this._wsEdit) {
-            this._wsEdit = new WorkspaceEdit();
-        }
-    }
-
-    private async endEdit(refresh?: boolean) {
-        if (this._wsEdit) {
-            if (this._currentRow) {
-                let sep = this.singleSeparator(this.getOptions().separator);
-                this._wsEdit.replace(this.uri, this._currentRange, this._currentRow.join(sep) + this.endOfLine());
+    public initialize() {
+        super.initialize();
+        workspace.onDidChangeTextDocument((e) => {
+            if (this._disposed || e.document.uri.toString() !== this.uri.toString()) {
+                return;
             }
-            await workspace.applyEdit(this._wsEdit);
-            this._wsEdit = undefined;
-            this._currentRange = undefined;
-            this._currentRow = undefined;
-            if (refresh) {
-                this.refresh();
+            if (this._inflight) {
+                this._seenVersions.push(e.document.version);
+                return;
             }
-        }
+            if (e.contentChanges.length === 0) {
+                return;
+            }
+            this._viewVersion = -1;
+            this.scheduleRefresh();
+        }, this, this._disposables);
     }
 
     public enableEditing(document: TextDocument) {
         this._document = document;
         this.webview.onDidReceiveMessage((e) => {
-            if (e.cellEditEnded) {
-                this.beginEdit();
-                this.setCellValue(e.rows, e.col, e.value);
+            if (!e || typeof e !== 'object') {
+                return;
             }
-            else if (e.rowEditEnded) {
-                this.endEdit();
-            }
-            else if (e.deleteRows) {
-                this.beginEdit();
-                this.deleteRows(e.rows);
-                this.endEdit();
-            }
-            else if (e.separator) {
+            if (e.lineEdits !== undefined) {
+                const edits = e.lineEdits, version = e.version;
+                this.enqueue(() => this.applyLineEdits(edits, version));
+            } else if (typeof e.separator === 'string' && e.separator.length >= 1 && e.separator.length <= 8) {
                 this.separator = e.separator;
-            }
-            else if (e.rowAdded) {
-                this.appendRow(e.count);
             }
         }, this, this._disposables);
     }
 
-    refresh(): void {
-        if (this._wsEdit)
-            return;
-        let self = this;
-        workspace.openTextDocument(this.uri).then(document => {
-            if (!self._disposed) {
-                self.webview.postMessage({
-                    refresh: true,
-                    content: document.getText()
-                });
+    // All host-side document work is serialized so line numbers always refer to the state the webview assumes.
+    private enqueue(task: () => Promise<void>) {
+        this._queue = this._queue.then(task).catch(() => this.scheduleRefresh());
+    }
+
+    // Returns the sanitized edits, or undefined when the message is malformed or out of the document's range.
+    private validateEdits(edits: any, lineCount: number): LineEdit[] | undefined {
+        if (!Array.isArray(edits) || edits.length === 0 || edits.length > MAX_EDITS) {
+            return undefined;
+        }
+        const out: LineEdit[] = [];
+        let chars = 0;
+        for (const e of edits) {
+            if (!e || typeof e.text !== 'string' || !Number.isInteger(e.start) || !Number.isInteger(e.end)
+                || e.start < 0 || e.end < e.start || e.start > lineCount || e.end > lineCount) {
+                return undefined;
             }
-        }, reason => {
-            window.showInformationMessage(reason.message);
+            chars += e.text.length;
+            if (chars > MAX_EDIT_CHARS) {
+                return undefined;
+            }
+            out.push({ start: e.start, end: e.end, text: e.text });
+        }
+        return out;
+    }
+
+    private async applyLineEdits(rawEdits: any, version: any) {
+        const doc = this._document;
+        if (version !== this._viewVersion || doc.version !== this._viewVersion) {
+            // computed against content the document no longer has: never apply, resync instead
+            this._viewVersion = -1;
+            this.scheduleRefresh();
+            return;
+        }
+        const edits = this.validateEdits(rawEdits, doc.lineCount);
+        if (!edits) {
+            this._viewVersion = -1;
+            this.scheduleRefresh();
+            return;
+        }
+        const eol = doc.eol === EndOfLine.CRLF ? "\r\n" : "\n";
+        const ops = buildTextOps({ lineCount: doc.lineCount, lineLength: (i) => doc.lineAt(i).text.length }, eol, edits);
+        if (!ops.length) {
+            this._viewVersion = -1;
+            this.scheduleRefresh();
+            return;
+        }
+        const wsEdit = new WorkspaceEdit();
+        for (const o of ops) {
+            wsEdit.replace(this.uri, new Range(o.sl, o.sc, o.el, o.ec), o.text);
+        }
+        const before = doc.version;
+        this._seenVersions = [];
+        this._inflight = true;
+        let ok = false;
+        try {
+            ok = await workspace.applyEdit(wsEdit);
+        } finally {
+            this._inflight = false;
+        }
+        // Anything other than our own single version bump means an external/undo change landed: resync.
+        const seen = this._seenVersions;
+        this._seenVersions = [];
+        if (!ok || doc.version !== before + 1 || seen.some(v => v !== before + 1)) {
+            this._viewVersion = -1;
+            this.scheduleRefresh();
+        } else {
+            this._viewVersion = doc.version;
+        }
+    }
+
+    private scheduleRefresh() {
+        if (this._refreshTimer || this._disposed) {
+            return;
+        }
+        this._refreshTimer = setTimeout(() => {
+            this._refreshTimer = undefined;
+            this.refresh();
+        }, 20);
+    }
+
+    public dispose() {
+        if (this._refreshTimer) {
+            clearTimeout(this._refreshTimer);
+            this._refreshTimer = undefined;
+        }
+        this._sendId++;
+        super.dispose();
+    }
+
+    refresh(): void {
+        const id = ++this._sendId; // a newer refresh cancels a transfer in flight
+        this.enqueue(async () => {
+            if (this._disposed || id !== this._sendId) {
+                return;
+            }
+            try {
+                const document = await workspace.openTextDocument(this.uri);
+                if (this._disposed || id !== this._sendId) {
+                    return;
+                }
+                const last = document.lineCount - 1;
+                const total = document.offsetAt(document.lineAt(last).range.end);
+                if (total <= INLINE_CHARS) {
+                    this._viewVersion = document.version;
+                    this.webview.postMessage({
+                        refresh: true,
+                        content: document.getText(),
+                        version: document.version
+                    });
+                } else {
+                    await this.sendChunks(document, id, total);
+                }
+            } catch (reason) {
+                window.showInformationMessage((reason && (reason as Error).message) || String(reason));
+            }
         });
     }
 
-	getHtml(ignoreState: boolean = false): string {
-		return `
+    // Big documents go out as ordered line-aligned chunks so no single message or string holds the whole file.
+    private async sendChunks(document: TextDocument, id: number, total: number) {
+        const version = document.version;
+        const lines = document.lineCount;
+        const eol = document.eol === EndOfLine.CRLF ? "\r\n" : "\n";
+        const alive = () => !this._disposed && id === this._sendId;
+        const post = async (m: any) => (await this.webview.postMessage(Object.assign({ id, version }, m))) !== false;
+        this._viewVersion = version;
+        if (!await post({ refreshChunk: 'start', chars: total, lines })) {
+            return;
+        }
+        let seq = 0, l0 = 0, perChunk = Math.max(1, Math.min(1000, Math.floor(CHUNK_CHARS * lines / Math.max(1, total))));
+        while (l0 < lines) {
+            if (!alive()) {
+                return;
+            }
+            if (document.version !== version) {
+                this.scheduleRefresh();
+                return;
+            }
+            const l1 = Math.min(lines, l0 + perChunk);
+            const lastChunk = l1 >= lines;
+            const text = document.getText(lastChunk
+                ? new Range(l0, 0, lines - 1, document.lineAt(lines - 1).text.length)
+                : new Range(l0, 0, l1, 0));
+            if (l1 - l0 === 1 && text.length > 2 * CHUNK_CHARS) {
+                // one enormous line: split it by characters, never inside a surrogate pair
+                const body = text.endsWith(eol) ? text.slice(0, text.length - eol.length) : text;
+                const tail = body.length === text.length ? '' : eol;
+                for (let a = 0; a < body.length; ) {
+                    let b = Math.min(body.length, a + CHUNK_CHARS);
+                    const c = body.charCodeAt(b - 1);
+                    if (b < body.length && c >= 0xd800 && c <= 0xdbff) {
+                        b++;
+                    }
+                    if (!alive() || !await post({ refreshChunk: 'data', seq: seq++, text: body.slice(a, b) + (b >= body.length ? tail : '') })) {
+                        return;
+                    }
+                    a = b;
+                }
+            } else {
+                if (!await post({ refreshChunk: 'data', seq: seq++, text })) {
+                    return;
+                }
+                perChunk = Math.max(1, Math.min(1000000, Math.floor(perChunk * CHUNK_CHARS / Math.max(1, text.length))));
+            }
+            l0 = l1;
+        }
+        if (alive()) {
+            await post({ refreshChunk: 'end', count: seq });
+        }
+    }
+
+    getHtml(ignoreState: boolean = false): string {
+        const s = this.scriptUri;
+        const nonce = makeNonce();
+        return `
         <!DOCTYPE html>
         <html>
         <head>
-        <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${this.webview.cspSource} 'unsafe-inline'; script-src ${this.webview.cspSource} 'unsafe-inline';">
-            <link href="${this.scriptUri}/vendor/tabulator.min.css" rel="stylesheet" type="text/css" />
-            <link href="${this.scriptUri}/styles/vscode.css" rel="stylesheet" type="text/css" />
+        <meta http-equiv="Content-Security-Policy" content="${csp(this.webview.cspSource, nonce)}">
+            <link href="${s}/core/grid.css" rel="stylesheet" type="text/css" />
+            <link href="${s}/styles/vscode.css" rel="stylesheet" type="text/css" />
         </head>
-        <script src="${this.scriptUri}/vendor/tabulator.min.js"></script>
-        <script src="${this.scriptUri}/csv.js"></script>
-        <body style="padding:0px; overflow:hidden">
-            <div id="gridwrap"><div id="flex"></div></div>
+        <body>
+            <div id="app"></div>
+            <script nonce="${nonce}" src="${s}/core/format.js"></script>
+            <script nonce="${nonce}" src="${s}/core/csv-parser.js"></script>
+            <script nonce="${nonce}" src="${s}/core/csv-provider.js"></script>
+            <script nonce="${nonce}" src="${s}/core/grid-core.js"></script>
+            <script nonce="${nonce}" src="${s}/core/grid.js"></script>
+            <script nonce="${nonce}" src="${s}/core/app-shell.js"></script>
+            <script nonce="${nonce}" src="${s}/csv.js"></script>
+            <script nonce="${nonce}" type="text/javascript">
+                function ignoreState() {
+                    return ${ignoreState === true};
+                }
+                function getOptions() {
+                    return ${safeJson(this.getOptions())};
+                }
+                handleEvents();
+                initPage();
+            </script>
         </body>
-        <script type="text/javascript">
-            function ignoreState() {
-                return ${ignoreState};
-            }
-            function getOptions() {
-                return ${JSON.stringify(this.getOptions())};
-            }
-            handleEvents();
-            initPage();
-        </script>
         </html>`;
-	}
+    }
 
     get viewType(): string {
         return "openxlviewer-csv-preview";
