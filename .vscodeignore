@@ -1,9 +1,17 @@
 .vscode/**
+.codemie/**
+.gitignore
 src/**
+test/**
 **/*.map
 tsconfig.json
 webpack.config.js
 data/**
 node_modules/**
 CLAUDE.md
+GRIDCRAFT_REPORT.md
+*_REPORT.md
+*REPORT*.md
 *.vsix
+*.xlsx
+txt
