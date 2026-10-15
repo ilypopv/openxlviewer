@@ -1,510 +1,318 @@
 var sendMessage;
-var csvTable = null;
 
 function initPage() {
     const vscode = acquireVsCodeApi();
     const options = getOptions();
-    const NEWLINES = "__newlines";
-    const STATE_VERSION = "5.0.0";
+    const STATE_VERSION = '6';
+    const readOnly = !options.customEditor;
     sendMessage = function (m) { vscode.postMessage(m); };
 
-    var table = null;
-    var ready = false;
-    var pending = null;
-    var headers = [];
-    var fields = [];
-    var source = [];
-    var itemById = new Map();
-    var scrollTimer = null;
+    const app = document.getElementById('app');
+    let provider = null, shell = null, sepSent = false;
+    // docVersion: document version the displayed rows were computed from (echoed with edits); transferring: a chunked refresh is in flight
+    let docVersion = null, transferring = false;
 
-    var numbersOrdinal = options.lineNumbers === "ordinal";
-    var numbersSource = options.lineNumbers === "source";
-    var lineNumbers = numbersOrdinal || numbersSource;
+    const saved = (function () {
+        if (ignoreState()) return null;
+        const s = vscode.getState() || options.state;
+        return s && s.version === STATE_VERSION ? s : null;
+    })();
 
-    // ---- toolbar (custom editor only) ----
-    if (options.customEditor) {
-        var bar = document.createElement("div");
-        bar.id = "toolbar";
-        var add = document.createElement("button");
-        add.textContent = "Add row";
-        add.addEventListener("click", addRow);
-        var del = document.createElement("button");
-        del.textContent = "Delete selected rows";
-        del.addEventListener("click", deleteSelected);
-        bar.appendChild(add);
-        bar.appendChild(del);
-        var wrap = document.getElementById("gridwrap");
-        wrap.parentNode.insertBefore(bar, wrap);
-        document.addEventListener("keydown", function (e) {
-            var t = e.target && e.target.tagName;
-            if (e.key === "Delete" && t !== "TEXTAREA" && t !== "INPUT") {
-                deleteSelected();
-            }
-        });
+    function measure(text) {
+        let c = measure.ctx;
+        if (!c) { c = measure.ctx = document.createElement('canvas').getContext('2d'); c.font = '13px system-ui'; }
+        return c.measureText(text).width;
     }
 
-    // ---- state ----
-    function getState() {
-        var widths = {};
-        var sorters = [];
-        var filters = [];
-        var holder = table.element.querySelector(".tabulator-tableholder");
-        table.getColumns().forEach(function (c) {
-            if (c.getField() && c.getField().indexOf("__") !== 0) {
-                widths[c.getField()] = c.getWidth();
-            }
-        });
-        table.getSorters().forEach(function (s) {
-            sorters.push({ column: s.field, dir: s.dir });
-        });
-        table.getHeaderFilters().forEach(function (f) {
-            filters.push({ field: f.field, value: f.value });
-        });
-        return {
-            uri: options.uri,
-            previewUri: options.previewUri,
-            languageId: options.languageId,
-            headers: headers,
-            widths: widths,
-            sorters: sorters,
-            filters: filters,
-            scrollTop: holder ? holder.scrollTop : 0,
-            scrollLeft: holder ? holder.scrollLeft : 0,
-            version: STATE_VERSION
-        };
+    shell = new OX.Shell(app, {
+        readOnly: readOnly,
+        tabs: false,
+        headerRows: function () { return provider ? provider.frozenRows : 0; },
+        onEdit: applyEdits,
+        onViewState: function (vs) {
+            const state = { version: STATE_VERSION, uri: options.uri, view: vs };
+            vscode.setState(state);
+            vscode.postMessage({ save: true, state: state });
+        },
+        onLink: function () { }
+    });
+
+    if (!readOnly) {
+        const add = document.createElement('button');
+        add.className = 'ox-btn ox-add'; add.textContent = 'Add row'; add.title = 'Append a row at the end';
+        add.addEventListener('click', addRow);
+        shell.bar.insertBefore(add, shell.btnClear);
+        shell.grid.on('contextmenu', onRowMenu);
     }
 
-    function preserveState() {
-        if (!table || !ready) return;
-        var state = getState();
-        vscode.setState(state);
-        vscode.postMessage({ save: true, state: state });
-    }
-
-    function sameHeaders(a, b) {
-        if (a.length !== b.length) return false;
-        for (var i = 0; i < a.length; i++) {
-            if (a[i] !== b[i]) return false;
+    function sourceRows(view) {
+        const order = shell._order, rows = new Set();
+        for (const rg of view.ranges) {
+            const r2 = Math.min(rg.r2, (order ? order.length : provider.rowCount) - 1);
+            for (let r = rg.r1; r <= r2; r++) rows.add(order ? order[r] : r);
         }
+        return Array.from(rows);
+    }
+
+    function onRowMenu(e) {
+        if (e.zone !== 'rowhdr' || !provider) return;
+        e.handled = true;
+        const sel = shell.grid.getSelection();
+        const rows = sourceRows(sel).filter(function (r) { return !(provider.hasHeaders && r === 0); });
+        const g = shell.grid;
+        g._showMenu([
+            ['Copy', '', function () { g.copy(false); }],
+            null,
+            ['Delete ' + (rows.length > 1 ? rows.length + ' rows' : 'row'), '', function () { deleteRows(rows); }, !rows.length],
+            ['Add row at end', '', addRow]
+        ], e.clientX, e.clientY);
+    }
+
+    function post(edits) {
+        if (!edits.length) return;
+        // an empty or comment-only file has no header line (-1): clamp so the host never sees negative lines
+        const clean = edits.map(function (e) {
+            const s = Math.max(0, e.start | 0);
+            return { start: s, end: Math.max(s, e.end | 0), text: e.text };
+        });
+        sendMessage({ lineEdits: clean, version: docVersion });
+        // the host applies a batch as exactly one document version
+        if (docVersion !== null) docVersion++;
+    }
+
+    function busy() {
+        if (!shell.loading && !transferring && docVersion !== null) return false;
+        shell.setMessage('Still loading: editing is available when the file is fully loaded');
+        shell.grid.refresh();
         return true;
     }
 
-    function usableState(content) {
-        if (ignoreState()) return null;
-        var json = vscode.getState() || options.state;
-        if (json && json.version === STATE_VERSION && sameHeaders(json.headers || [], content.bindings.map(function (b) { return b.header; }))) {
-            return json;
+    function applyEdits(edits) {
+        if (readOnly || !provider || busy()) return;
+        const p = provider, changed = new Map(), appended = [];
+        let maxR = -1;
+        edits.forEach(function (e) { if (e.r > maxR) maxR = e.r; });
+        const startCount = p.rowCount;
+        const viewActive = !!shell._order;
+        while (p.rowCount <= maxR) {
+            const r = p.appendRow();
+            appended.push({ r: r, range: p.getSourceRange(r) });
         }
-        return null;
-    }
-
-    // ---- formatting ----
-    function esc(text) {
-        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    }
-
-    function toHeaderCase(text) {
-        var t = text.replace(/([a-z])([A-Z])/g, "$1 $2");
-        return t.length ? t.charAt(0).toUpperCase() + t.slice(1) : t;
-    }
-
-    function formatNumber(v, fmt) {
-        try {
-            var m = /^([a-zA-Z])(\d*)$/.exec(fmt || "");
-            if (!m) return String(v);
-            var p = m[2] === "" ? null : parseInt(m[2], 10);
-            switch (m[1].toLowerCase()) {
-                case "g": return p ? String(Number(v.toPrecision(p))) : String(v);
-                case "n": var d = p === null ? 2 : p; return v.toLocaleString(undefined, { minimumFractionDigits: d, maximumFractionDigits: d });
-                case "f": return v.toFixed(p === null ? 2 : p);
-                case "d": var s = String(Math.trunc(Math.abs(v))); while (p && s.length < p) s = "0" + s; return (v < 0 ? "-" : "") + s;
-                case "c": var c = p === null ? 2 : p; return v.toLocaleString(undefined, { style: "currency", currency: "USD", minimumFractionDigits: c, maximumFractionDigits: c });
-                case "p": return (v * 100).toFixed(p === null ? 2 : p) + "%";
-                case "e": return v.toExponential(p === null ? 6 : p);
-                case "x": return Math.trunc(v).toString(16);
-            }
-        } catch (e) { }
-        return String(v);
-    }
-
-    function valueFormatter(cell) {
-        var v = cell.getValue();
-        if (v === null || v === undefined) return "";
-        return esc(typeof v === "number" ? formatNumber(v, options.numberFormat) : v);
-    }
-
-    function lineFormatter(cell) {
-        if (numbersSource) return String(cell.getValue());
-        if (numbersOrdinal) {
-            try { return String(cell.getRow().getPosition(true)); } catch (e) { return ""; }
+        const ordered = edits.filter(function (e) { return e.r >= startCount || p.getRaw(e.r, e.c) !== e.text; });
+        const lineEdits = [];
+        ordered.forEach(function (e) {
+            if (e.r < startCount && !changed.has(e.r)) changed.set(e.r, p.getSourceRange(e.r));
+        });
+        ordered.forEach(function (e) { p.setCell(e.r, e.c, e.text); });
+        changed.forEach(function (range, r) { lineEdits.push({ start: range.start, end: range.end, text: p.serializeRow(r) }); });
+        if (appended.length) {
+            const text = appended.map(function (a) { return p.serializeRow(a.r); }).join('\n');
+            lineEdits.push({ start: appended[0].range.start, end: appended[0].range.start, text: text });
         }
-        return "";
-    }
-
-    function mixedSorter(a, b) {
-        var an = typeof a === "number", bn = typeof b === "number";
-        if (an && bn) return a - b;
-        if (an) return -1;
-        if (bn) return 1;
-        return String(a === undefined || a === null ? "" : a).localeCompare(String(b === undefined || b === null ? "" : b), undefined, { numeric: true });
-    }
-
-    function containsFilter(headerValue, rowValue) {
-        return String(rowValue === undefined || rowValue === null ? "" : rowValue).toLowerCase().indexOf(String(headerValue).toLowerCase()) >= 0;
-    }
-
-    function toCellValue(text) {
-        if (options.formatValues === "always" && text.length) {
-            var num = Number(text);
-            if (!isNaN(num)) return num;
-        }
-        return text;
-    }
-
-    // ---- editing ----
-    function cellEditor(cell, onRendered, success, cancel) {
-        var ta = document.createElement("textarea");
-        var v = cell.getValue();
-        var done = false;
-        ta.value = v === null || v === undefined ? "" : String(v);
-        ta.className = "cell-editor";
-        onRendered(function () { ta.focus(); ta.select(); });
-        ta.addEventListener("keydown", function (e) {
-            if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                e.stopPropagation();
-                if (!done) { done = true; success(ta.value); }
-            } else if (e.key === "Escape") {
-                e.stopPropagation();
-                if (!done) { done = true; cancel(); }
-            }
-        });
-        ta.addEventListener("blur", function () {
-            if (!done) { done = true; success(ta.value); }
-        });
-        return ta;
-    }
-
-    function countNewlines(obj) {
-        var count = 0;
-        Object.keys(obj).forEach(function (key) {
-            var value = obj[key];
-            if (typeof value === "string") {
-                count += value.split("\n").length - 1;
-            }
-        });
-        return count;
-    }
-
-    function rangeFor(item, refreshNewlines) {
-        var idx = source.indexOf(item);
-        var start = idx;
-        for (var i = 0; i < idx; i++) start += source[i][NEWLINES];
-        var end = start + item[NEWLINES] + 1;
-        if (refreshNewlines) item[NEWLINES] = countNewlines(item);
-        return { start: start, end: end };
-    }
-
-    function onCellEdited(cell) {
-        var field = cell.getField();
-        var row = cell.getRow();
-        var item = itemById.get(row.getData().__id);
-        if (!item) return;
-        var oldVal = cell.getOldValue();
-        var old = oldVal === null || oldVal === undefined ? "" : String(oldVal);
-        var text = String(cell.getValue());
-        var converted = toCellValue(text);
-        item[field] = converted;
-        var upd = {};
-        upd[field] = converted;
-        row.update(upd);
-        if (text === old) return;
-        sendMessage({
-            cellEditEnded: true,
-            rows: rangeFor(item, true),
-            col: fields.indexOf(field),
-            value: text
-        });
-        sendMessage({ rowEditEnded: true, cancel: false });
+        // New rows are not part of a sort/filter order; drop the view so they are visible.
+        if (appended.length && viewActive) { shell.clearView(); shell.setMessage('Sort/filter cleared: rows were added'); }
+        shell.grid.invalidate();
+        shell.grid.refresh();
+        shell._updateAll();
+        post(lineEdits);
     }
 
     function addRow() {
-        sendMessage({ rowAdded: true, count: fields.length });
-        sendMessage({ rowEditEnded: true, cancel: false });
+        if (readOnly || !provider || busy()) return;
+        const r = provider.appendRow();
+        const range = provider.getSourceRange(r);
+        post([{ start: range.start, end: range.start, text: provider.serializeRow(r) }]);
+        if (shell._order) shell.clearView();
+        shell.grid.invalidate();
+        shell.grid.select(r, 0);
+        shell.grid.scrollTo(r, 0);
     }
 
-    function deleteSelected() {
-        if (!table || !options.customEditor) return;
-        var rows = table.getSelectedRows();
-        if (!rows.length) return;
-        var items = rows.map(function (r) { return itemById.get(r.getData().__id); }).filter(Boolean);
-        var ranges = items.map(function (item) { return rangeFor(item, false); });
-        rows.forEach(function (r) { r.delete(); });
-        items.forEach(function (item) {
-            source.splice(source.indexOf(item), 1);
-            itemById.delete(item.__id);
+    function deleteRows(rows) {
+        if (readOnly || !provider || !rows.length || busy()) return;
+        const ranges = provider.deleteRows(rows);
+        const merged = [];
+        ranges.forEach(function (g) {
+            const last = merged[merged.length - 1];
+            if (last && last.end === g.start) last.end = g.end; else merged.push({ start: g.start, end: g.end, text: '' });
         });
-        sendMessage({ deleteRows: true, rows: ranges });
+        post(merged);
+        shell.clearView();
+        shell.grid.invalidate();
+        shell.grid.refresh();
     }
 
-    // ---- rendering ----
-    function columnWidth(i, saved, field) {
-        if (saved && saved.widths && saved.widths[field]) return saved.widths[field];
-        if (options.resizeColumns === "all") return undefined;
-        if (options.resizeColumns === "first" && i === 0) return undefined;
-        return 100;
-    }
+    const later = typeof MessageChannel !== 'undefined' && typeof window !== 'undefined' && window.addEventListener
+        ? (function () { const ch = new MessageChannel(), q = []; ch.port1.onmessage = function () { const f = q.shift(); if (f) f(); }; return function (fn) { q.push(fn); ch.port2.postMessage(0); }; })()
+        : function (fn) { setTimeout(fn, 0); };
+    const SYNC_LIMIT = 4000000, FIRST_ROWS = 2000;
+    let job = null, enc = null;
 
-    function buildColumns(content, saved) {
-        var cols = [];
-        if (lineNumbers || options.customEditor) {
-            cols.push({
-                title: "",
-                field: "__line",
-                formatter: lineFormatter,
-                hozAlign: "right",
-                headerSort: false,
-                resizable: false,
-                frozen: true,
-                cssClass: "row-header",
-                cellClick: options.customEditor ? function (e, cell) { cell.getRow().toggleSelect(); } : undefined
-            });
-        }
-        content.bindings.forEach(function (b, i) {
-            var title = b.header;
-            if (options.capitalizeHeaders) title = toHeaderCase(title);
-            var def = {
-                title: esc(title),
-                field: b.binding,
-                formatter: valueFormatter,
-                sorter: mixedSorter,
-                headerFilter: "input",
-                headerFilterFunc: containsFilter,
-                editor: options.customEditor ? cellEditor : false
-            };
-            var w = columnWidth(i, saved, b.binding);
-            if (w) def.width = w;
-            cols.push(def);
-        });
-        return cols;
-    }
-
-    function setContent(content) {
-        source = content.data;
-        itemById = new Map();
-        source.forEach(function (item) { itemById.set(item.__id, item); });
-    }
-
-    function render(content) {
-        var newHeaders = content.bindings.map(function (b) { return b.header; });
-        if (table && ready && sameHeaders(newHeaders, headers)) {
-            setContent(content);
-            table.replaceData(content.data);
-            return;
-        }
-        if (table && !ready) {
-            pending = content;
-            return;
-        }
-        var saved = table ? null : usableState(content);
-        if (table) {
-            table.destroy();
-            table = null;
-        }
-        ready = false;
-        headers = newHeaders;
-        fields = content.bindings.map(function (b) { return b.binding; });
-        setContent(content);
-
-        var opts = {
-            index: "__id",
-            height: "100%",
-            layout: "fitData",
-            columns: buildColumns(content, saved),
-            columnDefaults: { headerSortTristate: true },
-            editTriggerEvent: "dblclick",
-            selectableRows: options.customEditor ? true : false,
-            selectableRowsRangeMode: "click",
-            renderHorizontal: fields.length > 50 ? "virtual" : "basic"
+    function parseOptions() {
+        return {
+            separator: options.separator,
+            quote: options.quoteMark || '"',
+            hasHeaders: options.hasHeaders,
+            commentChar: options.commentCharacter,
+            skipComments: options.skipComments
         };
-        if (saved) {
-            if (saved.sorters && saved.sorters.length) opts.initialSort = saved.sorters;
-            if (saved.filters && saved.filters.length) opts.initialHeaderFilter = saved.filters;
-        }
-        table = new Tabulator("#flex", opts);
-        csvTable = table;
-
-        table.on("tableBuilt", function () {
-            table.setData(content.data).then(function () {
-                var holder = table.element.querySelector(".tabulator-tableholder");
-                if (saved && holder) {
-                    holder.scrollTop = saved.scrollTop || 0;
-                    holder.scrollLeft = saved.scrollLeft || 0;
-                }
-                ready = true;
-                preserveState();
-                if (pending) {
-                    var p = pending;
-                    pending = null;
-                    render(p);
-                }
-            });
-            var h = table.element.querySelector(".tabulator-tableholder");
-            if (h) {
-                h.addEventListener("scroll", function () {
-                    clearTimeout(scrollTimer);
-                    scrollTimer = setTimeout(preserveState, 300);
-                });
-            }
-        });
-        table.on("dataSorted", function () {
-            if (numbersOrdinal && ready) table.redraw(true);
-            preserveState();
-        });
-        table.on("dataFiltered", function () {
-            if (numbersOrdinal && ready) table.redraw(true);
-            preserveState();
-        });
-        table.on("columnResized", preserveState);
-        table.on("cellEdited", onCellEdited);
     }
 
-    window.csvRender = render;
+    function beginLoad(expectedChars, id) {
+        if (job) job.cancelled = true;
+        transferring = id !== null && id !== undefined;
+        const prevProvider = provider;
+        job = {
+            id: id, seq: 0, cancelled: false, final: false, pumping: false, swapped: false, sync: false,
+            buf: new Uint8Array(Math.max(1024, expectedChars | 0)), filled: 0, expected: expectedChars | 0,
+            ix: new OX.CsvIndex(parseOptions()), t0: performance.now(), lastPos: -1, lastInv: 0,
+            prev: prevProvider ? shell.getViewState() : null, prevProvider: prevProvider, state0: null
+        };
+        return job;
+    }
+
+    function feed(j, text) {
+        enc = enc || new TextEncoder();
+        let pos = 0;
+        while (pos < text.length) {
+            const rest = pos ? text.slice(pos) : text;
+            const r = enc.encodeInto(rest, j.buf.subarray(j.filled));
+            j.filled += r.written; pos += r.read;
+            if (r.read < rest.length) {
+                const nb = new Uint8Array(Math.max(Math.ceil(j.buf.length * 1.2), j.filled + (rest.length - r.read) + 65536));
+                nb.set(j.buf.subarray(0, j.filled));
+                j.buf = nb;
+            }
+        }
+        j.ix.setSource(j.buf, j.filled, false);
+    }
+
+    function makeProvider(j) {
+        const ix = j.ix;
+        provider = new OX.CsvProvider(ix, {
+            hasHeaders: options.hasHeaders,
+            capitalizeHeaders: options.capitalizeHeaders,
+            formatValues: options.formatValues,
+            numberFormat: options.numberFormat,
+            lineNumbers: options.lineNumbers,
+            separator: ix.sepDirective || options.separator,
+            quote: options.quoteMark || '"',
+            dark: shell.isDark(),
+            measure: measure
+        });
+        if (j.prevProvider) j.prevProvider._userWidths.forEach(function (w, c) { provider.setColWidth(c, w); });
+        shell.setProvider(provider);
+        j.swapped = true;
+        if (ix.done) autosize();
+        if (ix.sepDirective && !sepSent) { sepSent = true; sendMessage({ separator: ix.sepDirective }); }
+        const vs = j.prev || (saved && saved.view) || null;
+        shell.applyViewState(vs);
+        j.state0 = JSON.stringify(shell.getViewState());
+        j.vs = vs;
+    }
+
+    function status(j, done) {
+        if (done) {
+            const n = provider.rowCount - (provider.hasHeaders ? 1 : 0);
+            shell.setMessage(n.toLocaleString() + ' rows, ' + provider.colCount + ' columns  |  parsed in ' + Math.round(performance.now() - j.t0) + ' ms');
+        } else {
+            const total = j.final ? j.filled : Math.max(j.expected, j.filled);
+            const pct = total ? Math.min(99, Math.floor(100 * j.ix.pos / total)) : 0;
+            shell.setMessage('Parsing ' + pct + '%  |  ' + Math.max(0, provider ? provider.rowCount - (provider.hasHeaders ? 1 : 0) : 0).toLocaleString() + ' rows');
+        }
+    }
+
+    function autosize() {
+        if (options.resizeColumns !== 'all') return;
+        provider.autosizeAll();
+        shell.grid.invalidate();
+    }
+
+    function complete(j) {
+        provider.sync();
+        if (j.prevProvider && j.prevProvider.dataRowCount === provider.dataRowCount) {
+            j.prevProvider._userHeights.forEach(function (h, r) { provider.setRowHeight(r, h); });
+        }
+        shell.loading = false;
+        transferring = false;
+        docVersion = j.version === undefined ? null : j.version;
+        if (j.reapply) {
+            autosize();
+            shell.grid.invalidate();
+            if (j.vs && JSON.stringify(shell.getViewState()) === j.state0) shell.applyViewState(j.vs);
+        }
+        status(j, true);
+        job = null;
+    }
+
+    // Indexes available data in slices; the grid shows the first rows as soon as they exist.
+    function step(j) {
+        if (j.cancelled) return;
+        const ix = j.ix;
+        ix.run(j.sync ? 0 : 12);
+        if (!j.swapped && (ix.done || ((ix.header !== null || !options.hasHeaders) && ix.n >= FIRST_ROWS))) {
+            makeProvider(j);
+            j.reapply = !ix.done;
+            shell.loading = !ix.done;
+        } else if (j.swapped) {
+            provider.sync();
+            const t = performance.now();
+            if (!ix.done && t - j.lastInv > 300) { j.lastInv = t; shell.grid.invalidate(); }
+        }
+        if (ix.done) { complete(j); return; }
+        status(j, false);
+        if (ix.pos !== j.lastPos) { j.lastPos = ix.pos; later(function () { step(j); }); } else j.pumping = false;
+    }
+
+    function pump(j) {
+        if (j.pumping || j.cancelled) return;
+        j.pumping = true; j.lastPos = -1;
+        later(function () { step(j); });
+    }
+
+    function finishLoad(j) {
+        j.final = true;
+        j.ix.setSource(j.buf, j.filled, true);
+        if (j.filled <= SYNC_LIMIT) { j.sync = true; j.pumping = true; step(j); } else pump(j);
+    }
+
+    // Whole document as one string (small files, tests, tools).
+    function load(text, version) {
+        text = text || '';
+        const j = beginLoad(0, null);
+        j.version = version;
+        enc = enc || new TextEncoder();
+        j.buf = enc.encode(text); j.filled = j.buf.length; j.expected = j.filled;
+        finishLoad(j);
+    }
+
+    // Large documents arrive as ordered chunks: {refreshChunk:'start'|'data'|'end', id, ...}; a newer start cancels the old transfer.
+    function chunk(m) {
+        if (m.refreshChunk === 'start') { beginLoad(m.chars, m.id).version = m.version; shell.setMessage('Loading...'); return; }
+        const j = job;
+        if (!j || j.id !== m.id || j.final) return;
+        if (m.refreshChunk === 'data') {
+            if (m.seq !== j.seq) { j.cancelled = true; job = null; transferring = false; vscode.postMessage({ refresh: true }); return; }
+            j.seq++;
+            feed(j, m.text);
+            if (!j.swapped) shell.setMessage('Loading ' + Math.floor(100 * j.filled / Math.max(1, j.expected)) + '%...');
+            pump(j);
+        } else if (m.refreshChunk === 'end') {
+            if (m.count !== j.seq) { j.cancelled = true; job = null; transferring = false; vscode.postMessage({ refresh: true }); return; }
+            finishLoad(j);
+        }
+    }
+
+    window.oxCsv = { load: load, chunk: chunk, shell: shell };
+    shell.setMessage('Opening...');
     vscode.postMessage({ refresh: true });
 }
 
-function parseContent(text) {
-    const options = getOptions();
-    var sep = options.separator;
-    var quote = options.quoteMark;
-    var hasHeaders = options.hasHeaders;
-    var comment = options.commentCharacter;
-    var skip = options.skipComments;
-    var formatAlways = options.formatValues === "always";
-    var formatUnquoted = options.formatValues === "unquoted";
-
-    var regexQuote = new RegExp(`^${quote}([\\S\\s]*)${quote}$`);
-    var regexDoubleQuote = new RegExp(`${quote}${quote}`, 'g');
-    var regexComment = new RegExp(String.raw`^\s*${comment}|^\s+$`);
-
-    // based on https://softwareengineering.stackexchange.com/a/368124
-    var regexLines = new RegExp(`((${quote}(?:[^${quote}]|)+${quote}|[^${quote}\n\r]+)+)`, 'g');
-
-    // http://markmintoff.com/2013/03/regex-split-by-comma-not-surrounded-by-quotes/
-    var regexItems = new RegExp(`${sep}(?=(?:[^${quote}]*${quote}[^${quote}]*${quote})*[^${quote}]*$)`);
-
-    function unquote(cell) {
-        if (cell.text.length > 0) {
-            var match = regexQuote.exec(cell.text);
-            if (match) {
-                cell.quoted = true;
-                return dblquote(match[1]);
-            }
-        }
-        return cell.text;
-    }
-
-    function dblquote(text) {
-        return text.length > 1 ? text.replace(regexDoubleQuote, `${quote}`) : text;
-    }
-
-    function isComment(text) {
-        return !skip ? false : ((text.length > 0) ? regexComment.exec(text) : true);
-    }
-
-    function isSep(text) {
-        var line = text.replace(/ /g, "");
-        var left = line.slice(0, 4).toLowerCase();
-        var result = (left === "sep=");
-        if (result && line.length == 5) {
-            var escapes = `+*?^$\.[]{}()|/`;
-            var char = line.slice(4);
-            sep = (escapes.indexOf(char) >= 0) ? "\\".concat(char) : char;
-            regexItems = new RegExp(`${sep}(?=(?:[^${quote}]*${quote}[^${quote}]*${quote})*[^${quote}]*$)`);
-            sendMessage({
-                separator: sep
-            });
-        }
-        return result;
-    }
-
-    function getBinding(n) {
-        var h1 = Math.floor(n / 26);
-        var h2 = n % 26;
-        if (h1 > 0) {
-            return String.fromCharCode(64 + h1) + String.fromCharCode(65 + h2);
-        } else {
-            return String.fromCharCode(65 + h2);
-        }
-    }
-
-    var data = [], headers = [], bindings = [];
-    var lines = text.match(regexLines) || [];
-    var firstLine = hasHeaders;
-    var maxLength = 0;
-
-    for (var i = 0; i < lines.length; i++) {
-        var line = lines[i].replace("\r", "");
-        if (i == 0 && isSep(line)) {
-            continue;
-        }
-        if (!isComment(line)) {
-            var items = line.split(regexItems);
-            if (items.length > maxLength) {
-                maxLength = items.length;
-            }
-            if (firstLine) {
-                for (var j = 0; j < items.length; j++) {
-                    var cell = { text: items[j] };
-                    headers.push(unquote(cell));
-                }
-                firstLine = false;
-            } else {
-                var obj = {};
-                obj["__newlines"] = line.split("\n").length - 1;
-                for (var j = 0; j < items.length; j++) {
-                    var cell = { text: items[j], quoted: false };
-                    var value = unquote(cell);
-                    if (formatAlways || (formatUnquoted && !cell.quoted)) {
-                        var num = value.length ? Number(value) : NaN;
-                        obj[getBinding(j)] = isNaN(num) ? value : num;
-                    } else {
-                        obj[getBinding(j)] = value;
-                    }
-                }
-                if (line.length > 0 || (i < lines.length - 1)) {
-                    obj["__id"] = ++parseContent.nextId;
-                    obj["__line"] = data.length + 1;
-                    data.push(obj);
-                }
-            }
-        }
-    }
-
-    if (maxLength === 0) {
-        maxLength = 1;
-    }
-
-    for (var i = 0; i < maxLength; i++) {
-        var key = getBinding(i);
-        var header = (headers.length > i) ? headers[i] : hasHeaders ? "" : key;
-        bindings.push({
-            binding: key,
-            header: header.length > 0 ? header : " "
-        });
-    }
-
-    return {
-        data: data,
-        bindings: bindings
-    }
-}
-parseContent.nextId = 0;
-
 function handleEvents() {
-    window.addEventListener("message", event => {
-        if (event.data.refresh) {
-            window.csvRender(parseContent(event.data.content));
-        }
+    window.addEventListener('message', function (event) {
+        const d = event.data;
+        if (!d || !window.oxCsv) return;
+        if (d.refreshChunk) window.oxCsv.chunk(d);
+        else if (d.refresh) window.oxCsv.load(d.content, d.version);
     });
 }

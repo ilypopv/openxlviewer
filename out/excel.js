@@ -1,397 +1,399 @@
 var sendMessage;
-var excelApp = null;
+var oxApp = null;
 
 function initPage() {
     const vscode = acquireVsCodeApi();
     const options = getOptions();
-    const STATE_VERSION = "5.0.0";
-    const MIN_ROWS = 100, MIN_COLS = 26;
+    const STATE_VERSION = '6';
+    const readOnly = !options.customEditor;
     sendMessage = function (m) { vscode.postMessage(m); };
 
-    var wb = null;
-    var sheetIdx = 0;
-    var table = null;
-    var ready = false;
-    var view = null;
-    var undoStack = [];
-    var redoStack = [];
-    var scrollTimer = null;
+    const app = document.getElementById('app');
+    let wb = null, bytes = null, active = 0;
+    let calc = null;
+    const providers = new Map();
+    const views = {};
+    let undoStack = [], redoStack = [], undoCells = 0;
+    let shell = null, loadCtl = null, cancelBtn = null;
 
-    var tabs = document.createElement("div");
-    tabs.id = "tabs";
-    var wrap = document.getElementById("gridwrap");
-    wrap.parentNode.insertBefore(tabs, wrap.nextSibling);
-
-    // ---- helpers ----
-    function esc(text) {
-        return String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-    }
-
-    function currentSheet() {
-        return wb.Sheets[wb.SheetNames[sheetIdx]];
-    }
-
-    function cellAt(ws, r, c) {
-        return ws[XLSX.utils.encode_cell({ r: r, c: c })];
-    }
-
-    function rawValue(cell) {
-        if (!cell) return "";
-        if (cell.v === undefined || cell.v === null) return cell.f ? "=" + cell.f : "";
-        return cell.v;
-    }
-
-    function displayText(cell) {
-        if (!cell) return "";
-        if (cell.w !== undefined) return cell.w;
-        if (cell.v === undefined || cell.v === null) return cell.f ? "=" + cell.f : "";
-        return String(cell.v);
-    }
-
-    function editText(cell) {
-        if (!cell) return "";
-        if (cell.f) return "=" + cell.f;
-        return cell.v === undefined || cell.v === null ? "" : String(cell.v);
-    }
-
-    function mixedSorter(a, b) {
-        var an = typeof a === "number", bn = typeof b === "number";
-        if (an && bn) return a - b;
-        if (an) return -1;
-        if (bn) return 1;
-        return String(a === undefined || a === null ? "" : a).localeCompare(String(b === undefined || b === null ? "" : b), undefined, { numeric: true });
-    }
-
-    function containsFilter(headerValue, rowValue) {
-        return String(rowValue === undefined || rowValue === null ? "" : rowValue).toLowerCase().indexOf(String(headerValue).toLowerCase()) >= 0;
-    }
-
-    function cloneCell(cell) {
-        return cell ? JSON.parse(JSON.stringify(cell)) : undefined;
-    }
-
-    function parseTyped(text, old) {
-        if (text === "") return undefined;
-        var cell;
-        if (text.length > 1 && text.charAt(0) === "=") {
-            cell = { t: "n", f: text.slice(1) };
-        } else if (text.trim() !== "" && isFinite(Number(text))) {
-            var n = Number(text);
-            cell = { t: "n", v: n };
-            if (old && old.z) cell.z = old.z;
-            try { cell.w = XLSX.SSF.format(cell.z || "General", n); } catch (e) { cell.w = text; }
-        } else if (/^(true|false)$/i.test(text)) {
-            cell = { t: "b", v: text.toLowerCase() === "true" };
-            cell.w = cell.v ? "TRUE" : "FALSE";
-        } else {
-            cell = { t: "s", v: text, w: text };
-        }
-        return cell;
-    }
-
-    // ---- state ----
-    function getState() {
-        var sorters = [], filters = [];
-        var holder = table ? table.element.querySelector(".tabulator-tableholder") : null;
-        if (table) {
-            table.getSorters().forEach(function (s) { sorters.push({ column: s.field, dir: s.dir }); });
-            table.getHeaderFilters().forEach(function (f) { filters.push({ field: f.field, value: f.value }); });
-        }
-        return {
-            uri: options.uri,
-            previewUri: options.previewUri,
-            selectedSheetIndex: sheetIdx,
-            sorters: sorters,
-            filters: filters,
-            scrollTop: holder ? holder.scrollTop : 0,
-            scrollLeft: holder ? holder.scrollLeft : 0,
-            version: STATE_VERSION
-        };
-    }
-
-    function preserveState() {
-        if (!ready) return;
-        var state = getState();
-        vscode.setState(state);
-        vscode.postMessage({ save: true, state: state });
-    }
-
-    function savedState() {
+    const saved = (function () {
         if (ignoreState()) return null;
-        var json = vscode.getState() || options.state;
-        return json && json.version === STATE_VERSION ? json : null;
+        const s = vscode.getState() || options.state;
+        return s && s.version === STATE_VERSION ? s : null;
+    })();
+
+    function measure(text, style) {
+        const c = measure.ctx || (measure.ctx = document.createElement('canvas').getContext('2d'));
+        c.font = (style && style.b ? 'bold ' : '') + (style && style.size ? style.size * 4 / 3 : 13) + 'px ' + ((style && style.font) || 'system-ui');
+        return c.measureText(text).width;
     }
 
-    // ---- editing ----
-    function textEditor(c) {
-        return function (cell, onRendered, success, cancel) {
-            var ta = document.createElement("textarea");
-            var done = false;
-            ta.value = editText(cellAt(currentSheet(), view.r0 + cell.getData().__r, view.c0 + c));
-            ta.className = "cell-editor";
-            onRendered(function () { ta.focus(); ta.select(); });
-            ta.addEventListener("keydown", function (e) {
-                if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    if (!done) { done = true; success(ta.value); }
-                } else if (e.key === "Escape") {
-                    e.stopPropagation();
-                    if (!done) { done = true; cancel(); }
-                }
-            });
-            ta.addEventListener("blur", function () {
-                if (!done) { done = true; success(ta.value); }
-            });
-            return ta;
+    function createShell() {
+        shell = new OX.Shell(app, {
+            readOnly: readOnly,
+            tabs: true,
+            headerRows: function () { return shell && shell.provider ? (shell.provider.frozenRows || 1) : 0; },
+            onEdit: applyEdits,
+            onViewState: function (vs) {
+                views[active] = vs;
+                const state = { version: STATE_VERSION, uri: options.uri, sheet: active, views: views };
+                vscode.setState(state);
+                vscode.postMessage({ save: true, state: state });
+            },
+            onLink: onLink
+        });
+        oxApp = shell;
+        const picLayer = document.createElement('div');
+        picLayer.className = 'ox-pics';
+        shell.grid.el.appendChild(picLayer);
+        // floating sheet pictures (drawing anchors): read-only overlay positioned over the canvas
+        shell._pics = null;
+        shell.layoutPics = function () {
+            const g = shell.grid, p = shell.provider;
+            const pics = (p && p.sheet && p.sheet.pictures) || [];
+            while (picLayer.children.length > pics.length) picLayer.removeChild(picLayer.lastChild);
+            if (!pics.length) return;
+            const W = g.el.clientWidth, H = g.el.clientHeight, z = g.getZoom();
+            for (let i = 0; i < pics.length; i++) {
+                const q = pics[i];
+                let img = picLayer.children[i];
+                if (!img || img.tagName !== 'IMG') { img = document.createElement('img'); if (picLayer.children[i]) picLayer.replaceChild(img, picLayer.children[i]); else picLayer.appendChild(img); }
+                if (img.getAttribute('src') !== q.url) img.setAttribute('src', q.url);
+                img.alt = '';
+                const rc = g.cellRect(q.r, q.c);
+                const L = Math.round(rc.x + q.dx * z), T = Math.round(rc.y + q.dy * z), Wd = Math.max(1, Math.round(q.w * z)), Ht = Math.max(1, Math.round(q.h * z));
+                img.style.cssText = 'left:' + L + 'px;top:' + T + 'px;width:' + Wd + 'px;height:' + Ht + 'px;';
+                img.style.display = (L + Wd < 0 || T + Ht < 0 || L > W || T > H) ? 'none' : '';
+            }
         };
+        shell.grid.scroller.addEventListener('scroll', function () { shell.layoutPics(); }, { passive: true });
+        shell.grid.on('zoom', function () { shell.layoutPics(); });
+        shell.grid.on('resizeCol', function () { shell.layoutPics(); });
+        shell.grid.on('resizeRow', function () { shell.layoutPics(); });
+        document.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && wb && (e.key === 'PageDown' || e.key === 'PageUp')) {
+                const vis = visibleSheets();
+                const i = vis.indexOf(active);
+                const n = vis[(i + (e.key === 'PageDown' ? 1 : vis.length - 1)) % vis.length];
+                if (n !== undefined && n !== active) { e.preventDefault(); showSheet(n); }
+            }
+        });
     }
 
-    function writeCell(si, r, c, cell) {
-        var ws = wb.Sheets[wb.SheetNames[si]];
-        var addr = XLSX.utils.encode_cell({ r: r, c: c });
-        if (cell === undefined) {
-            delete ws[addr];
-        } else {
-            ws[addr] = cell;
-            var range = XLSX.utils.decode_range(ws["!ref"] || "A1");
-            if (r > range.e.r) range.e.r = r;
-            if (c > range.e.c) range.e.c = c;
-            if (r < range.s.r) range.s.r = r;
-            if (c < range.s.c) range.s.c = c;
-            ws["!ref"] = XLSX.utils.encode_range(range);
+    function onLink(e) {
+        if (!e || !wb) return;
+        const p = shell.provider;
+        const link = (p && p.sheet && p.sheet.hyperlinks && p.sheet.hyperlinks.get(e.sr + ',' + e.c)) || {};
+        const url = e.url || link.url, loc = e.location || link.location;
+        if (url) sendMessage({ openLink: url });
+        else if (loc) goLocation(loc);
+    }
+
+    function goLocation(loc) {
+        const m = /^(?:'((?:[^']|'')+)'|([^!']+))!(.+)$/.exec(String(loc).trim());
+        let ref = String(loc).trim(), idx = active;
+        if (m) {
+            const name = (m[1] ? m[1].replace(/''/g, "'") : m[2]).toLowerCase();
+            const sh = wb.sheets.filter(function (s) { return s.name.toLowerCase() === name && s.state === 'visible'; })[0];
+            if (!sh) { shell.setMessage('Link target sheet not found: ' + (m[1] || m[2])); return; }
+            idx = sh.index; ref = m[3];
         }
+        if (idx !== active) showSheet(idx);
+        if (!shell._goto(ref)) shell.setMessage('Cannot follow link: ' + loc);
     }
 
-    function refreshRow(rowIdx, c) {
-        if (!table) return;
-        var row = table.getRow(rowIdx);
-        if (!row) return;
-        var upd = {};
-        upd["c" + c] = rawValue(cellAt(currentSheet(), view.r0 + rowIdx, view.c0 + c));
-        row.update(upd);
-        row.reformat();
+    function visibleSheets() {
+        const out = [];
+        wb.sheets.forEach(function (s) { if (s.state === 'visible') out.push(s.index); });
+        return out.length ? out : [0];
     }
 
-    function applyChange(ch, useAfter) {
-        if (ch.si !== sheetIdx) showSheet(ch.si);
-        writeCell(ch.si, ch.r, ch.c, cloneCell(useAfter ? ch.after : ch.before));
-        refreshRow(ch.r - view.r0, ch.c - view.c0);
+    function renderTabs() {
+        shell.tabs.textContent = '';
+        visibleSheets().forEach(function (i) {
+            const info = wb.sheets[i];
+            const b = document.createElement('button');
+            b.className = 'ox-tab' + (i === active ? ' active' : '');
+            b.textContent = info.name;
+            if (info.tabColor) b.style.boxShadow = 'inset 0 -3px 0 ' + info.tabColor;
+            b.addEventListener('click', function () { if (i !== active) showSheet(i); });
+            shell.tabs.appendChild(b);
+        });
     }
 
-    function onCellEdited(cell) {
-        var c = parseInt(cell.getField().slice(1), 10);
-        var rowIdx = cell.getRow().getData().__r;
-        var r = view.r0 + rowIdx, cc = view.c0 + c;
-        var ws = currentSheet();
-        var old = cellAt(ws, r, cc);
-        var text = String(cell.getValue() === undefined || cell.getValue() === null ? "" : cell.getValue());
-        if (text === editText(old)) {
-            refreshRow(rowIdx, c);
+    function newProvider(sheet) { return new OX.XlsxProvider(wb, sheet, { measure: measure }); }
+
+    function loadError(i, err) {
+        const msg = 'Cannot load sheet "' + (wb.sheets[i] ? wb.sheets[i].name : i) + '": ' + (err && err.message ? err.message : err);
+        shell.setMessage(msg);
+        sendMessage({ error: 'OpenXL Viewer: ' + msg });
+    }
+
+    function setCancel(fn) {
+        if (!cancelBtn) {
+            cancelBtn = document.createElement('button');
+            cancelBtn.className = 'ox-tab';
+            cancelBtn.textContent = 'Cancel';
+            cancelBtn.style.cssText = 'margin-left:8px;cursor:pointer';
+            shell.status.insertBefore(cancelBtn, shell.msg.nextSibling);
+        }
+        cancelBtn.onclick = fn;
+        cancelBtn.style.display = fn ? '' : 'none';
+    }
+
+    function mount(p, i, viewState, loading) {
+        shell.setProvider(p);
+        if (!loading) shell.setMessage('Ready');
+        shell.applyViewState(viewState || views[i] || null);
+        shell.layoutPics();
+        shell.grid.focus();
+    }
+
+    // streams the sheet in; the first rows are shown as soon as they are parsed, the rest keeps loading in time slices
+    function showSheet(i, viewState) {
+        if (loadCtl) { loadCtl.abort(); loadCtl = null; setCancel(null); }
+        const prev = active;
+        active = i;
+        renderTabs();
+        const done = providers.get(i);
+        if (done) { mount(done, i, viewState); return; }
+        const ctl = new AbortController(), name = wb.sheets[i].name;
+        let p = null, lastInv = 0;
+        loadCtl = ctl;
+        shell.setMessage('Loading ' + name + '... 0%');
+        setCancel(function () {
+            ctl.abort();
+            if (p) { p.cancelledPartial = true; shell.setMessage('Loading cancelled: showing the first ' + p.sheet.rowCount.toLocaleString() + ' rows (read only)'); loadCtl = null; setCancel(null); }
+            else if (prev !== i && providers.has(prev)) { loadCtl = null; setCancel(null); showSheet(prev); shell.setMessage('Loading cancelled'); }
+            else { loadCtl = null; setCancel(null); shell.setMessage('Loading cancelled'); }
+        });
+        wb.loadSheetAsync(i, {
+            signal: ctl.signal,
+            onProgress: function (info) {
+                if (ctl.signal.aborted || loadCtl !== ctl) return;
+                if (info.partial) shell.setMessage('Loading ' + name + '... ' + Math.floor(info.fraction * 100) + '%  (' + info.rows.toLocaleString() + ' rows)');
+                else return;
+                if (!p && info.rows > 0) { p = newProvider(info.sheet); mount(p, i, viewState, true); lastInv = Date.now(); }
+                else if (p && Date.now() - lastInv > 500) { shell.grid.invalidate(); lastInv = Date.now(); }
+            }
+        }).then(function (sh) {
+            if (loadCtl !== ctl) return;
+            loadCtl = null; setCancel(null);
+            if (!p) p = newProvider(sh);
+            providers.set(i, p);
+            if (shell.provider === p) {
+                shell.grid.invalidate();
+                shell.layoutPics();
+                if (shell.view && (shell.view.sort || shell.view.filters.size)) shell.recomputeView();
+                shell._updateAll();
+                shell.setMessage(sh.warning ? sh.warning : 'Ready');
+            } else mount(p, i, viewState);
+        }).catch(function (err) {
+            if (err && err.name === 'AbortError') return;
+            if (loadCtl === ctl) { loadCtl = null; setCancel(null); }
+            loadError(i, err);
+        });
+    }
+
+    function load(content) {
+        const raw = content && content.data !== undefined ? content.data : content;
+        const reloading = !!wb;
+        // parse first: a file that fails to open must not wipe the workbook (and unsaved edits) on screen
+        let nb, nbytes;
+        try {
+            nbytes = raw instanceof Uint8Array ? raw : new Uint8Array(raw);
+            nb = OX.readXlsx(nbytes);
+        } catch (err) {
+            const why = err && err.message ? err.message : String(err);
+            shell.setMessage((reloading ? 'Cannot reload file (keeping the previous content): ' : 'Cannot open file: ') + why);
+            sendMessage({ error: 'OpenXL Viewer: ' + why });
             return;
         }
-        var after = parseTyped(text, old);
-        undoStack.push({ si: sheetIdx, r: r, c: cc, before: cloneCell(old), after: cloneCell(after) });
+        bytes = nbytes; wb = nb;
+        if (loadCtl) { loadCtl.abort(); loadCtl = null; setCancel(null); }
+        providers.clear();
+        calc = null;
+        undoStack = []; redoStack = []; undoCells = 0;
+        let idx = 0;
+        const vis = visibleSheets();
+        if (saved && saved.views) Object.keys(saved.views).forEach(function (k) { if (!views[k]) views[k] = saved.views[k]; });
+        // On a host refresh keep the sheet the user is on; the saved state only decides the first load.
+        if (reloading && vis.indexOf(active) >= 0) idx = active;
+        else if (saved && saved.sheet !== undefined && vis.indexOf(saved.sheet) >= 0) idx = saved.sheet; else idx = vis[0];
+        try { showSheet(idx); } catch (err) { loadError(idx, err); }
+    }
+
+    function providerFor(si) {
+        let q = providers.get(si);
+        if (!q) { q = newProvider(wb.loadSheet(si)); providers.set(si, q); }
+        return q;
+    }
+
+    function getCalc() {
+        if (calc) return calc;
+        calc = new OX.Calc({
+            sheetNames: wb.sheets.map(function (x) { return x.name; }),
+            date1904: wb.date1904,
+            sheetIndexByName: function (n) {
+                const l = String(n).toLowerCase();
+                for (let i = 0; i < wb.sheets.length; i++) if (wb.sheets[i].name.toLowerCase() === l) return i;
+                return -1;
+            },
+            getCell: function (si, r, c) { return providerFor(si).cellAt(r, c); },
+            getExtent: function (si) { const q = providerFor(si); return { rowCount: q.rowCount, colCount: q.colCount }; },
+            forEachCell: function (si, r1, c1, r2, c2, cb) { providerFor(si).forEachCell(r1, c1, r2, c2, function (cell, r, c) { cb(r, c, cell); }); }
+        });
+        return calc;
+    }
+
+    function inArrayFormula(q, r, c) {
+        const arr = q.sheet && q.sheet.arrays;
+        if (!arr) return false;
+        for (let i = 0; i < arr.length; i++) { const a = arr[i]; if (r >= a.r1 && r <= a.r2 && c >= a.c1 && c <= a.c2) return true; }
+        return false;
+    }
+
+    // writes a calculated value into the cell, keeping its formula and style; recorded in the undo transaction
+    function putCalculated(q, si, r, c, res, items, seen) {
+        const cell = q.cellAt(r, c);
+        if (!cell || !cell.f || inArrayFormula(q, r, c)) return false;
+        let t = res.t, v = res.v;
+        if (t === 'e' && v === '#CIRC!') { t = 'n'; v = 0; }
+        if (cell.t === t && cell.v === v) return false;
+        const key = si + ':' + r + ':' + c;
+        let it = seen.get(key);
+        const before = q.setCell(r, c, { t: t, v: v, f: cell.f, s: cell.s });
+        const after = q.overlay.has(r * 16384 + c) ? q.overlay.get(r * 16384 + c) : undefined;
+        if (it) it.after = after;
+        else { it = { si: si, r: r, c: c, before: before, after: after }; seen.set(key, it); items.push(it); }
+        return true;
+    }
+
+    // result cells inside array formulas are not recomputed (the engine cannot spill); these are reported to the user
+    let staleArrays = 0;
+    function noteArray(q, r, c) { if (inArrayFormula(q, r, c)) staleArrays++; }
+
+    function recalculate(q, si, items) {
+        if (!OX.Calc) return 0;
+        const t0 = performance.now();
+        let n = 0;
+        staleArrays = 0;
+        try {
+            const engine = getCalc();
+            const seen = new Map();
+            items.forEach(function (it) { seen.set(si + ':' + it.r + ':' + it.c, it); });
+            items.slice().forEach(function (it) {
+                const cell = q.cellAt(it.r, it.c);
+                if (cell && cell.f) { const res = engine.evaluate(si, it.r, it.c, cell.f); if (putCalculated(q, si, it.r, it.c, res, items, seen)) n++; }
+            });
+            let changed = items.map(function (it) { return { sheet: it.si !== undefined ? it.si : si, r: it.r, c: it.c }; });
+            for (let round = 0; round < 40 && changed.length; round++) {
+                const res = engine.recalcDependents(changed, { maxEvals: 500000, timeBudgetMs: 250, volatile: false });
+                res.forEach(function (val) {
+                    const vq = providerFor(val.sheet);
+                    noteArray(vq, val.r, val.c);
+                    if (putCalculated(vq, val.sheet, val.r, val.c, val, items, seen)) n++;
+                });
+                changed = res.partial && res.pending ? res.pending : [];
+            }
+        } catch (err) {
+            shell.setMessage('Formulas were not recalculated: ' + (err && err.message ? err.message : err));
+            calc = null;
+            return -1;
+        }
+        return n;
+    }
+
+    function applyEdits(edits, source) {
+        if (readOnly || !wb) return;
+        const p = shell.provider, si = active, items = [];
+        if (p.sheet && p.sheet.partial) {
+            shell.setMessage(p.cancelledPartial ? 'Loading was cancelled: this sheet is read only. Switch sheets and back to load it again.' : 'The sheet is still loading: wait for it to finish before editing.');
+            shell.grid.refresh(); return;
+        }
+        let hasFormula = false, firstError = null, rejected = 0;
+        for (const e of edits) {
+            if (p.getRaw(e.r, e.c) === e.text) continue;
+            let cell = p.editFromText(e.r, e.c, e.text);
+            if (cell === undefined) continue;
+            if (cell && cell.error) { rejected++; if (!firstError) firstError = cell.error; continue; }
+            if (cell.cleared) cell = null;
+            if (cell && cell.f) hasFormula = true;
+            const before = p.setCell(e.r, e.c, cell);
+            items.push({ r: e.r, c: e.c, before: before, after: p.overlay.has(e.r * 16384 + e.c) ? p.overlay.get(e.r * 16384 + e.c) : undefined });
+        }
+        if (firstError) shell.setMessage('Edit rejected: ' + firstError + (rejected > 1 ? ' (' + rejected + ' cells)' : ''));
+        if (!items.length) { shell.grid.refresh(); return; }
+        const recalced = recalculate(p, si, items);
+        undoStack.push({ si: si, items: items });
+        undoCells += items.length;
+        while (undoStack.length > 1 && (undoStack.length > 2000 || undoCells > 500000)) undoCells -= undoStack.shift().items.length;
         redoStack = [];
-        writeCell(sheetIdx, r, cc, after);
-        wb.Workbook = wb.Workbook || {};
-        wb.Workbook.CalcPr = wb.Workbook.CalcPr || {};
-        wb.Workbook.CalcPr.fullCalcOnLoad = true;
-        refreshRow(rowIdx, c);
-        vscode.postMessage({ changed: true, reason: "Cell Edited" });
+        shell.grid.invalidate();
+        shell.grid.refresh();
+        shell._updateAll();
+        if (!firstError && staleArrays > 0) shell.setMessage('Array formula results are not recalculated here and may be out of date; they update when the file is opened in Excel.');
+        else if (!firstError && recalced > 0) shell.setMessage('Recalculated ' + recalced.toLocaleString() + ' formula' + (recalced === 1 ? '' : 's'));
+        sendMessage({ changed: true, reason: source === 'paste' ? 'Paste' : 'Edit' });
     }
 
     function undo() {
-        var ch = undoStack.pop();
-        if (!ch) return;
-        redoStack.push(ch);
-        applyChange(ch, false);
+        const tx = undoStack.pop(); if (!tx) return;
+        undoCells -= tx.items.length;
+        if (tx.si !== active) showSheet(tx.si);
+        for (let i = tx.items.length - 1; i >= 0; i--) { const it = tx.items[i]; providerFor(it.si !== undefined ? it.si : tx.si).restoreSlot(it.r, it.c, it.before); }
+        calc = null;
+        redoStack.push(tx);
+        shell.grid.refresh(); shell._updateAll();
     }
 
     function redo() {
-        var ch = redoStack.pop();
-        if (!ch) return;
-        undoStack.push(ch);
-        applyChange(ch, true);
-    }
-
-    // ---- rendering ----
-    function renderTabs() {
-        tabs.innerHTML = "";
-        wb.SheetNames.forEach(function (name, i) {
-            var b = document.createElement("button");
-            b.textContent = name;
-            if (i === sheetIdx) b.className = "active";
-            b.addEventListener("click", function () {
-                if (i === sheetIdx) return;
-                showSheet(i);
-                preserveState();
-            });
-            tabs.appendChild(b);
-        });
-    }
-
-    function showSheet(i, saved) {
-        sheetIdx = i;
-        ready = false;
-        if (table) {
-            table.destroy();
-            table = null;
-        }
-        renderTabs();
-        var ws = currentSheet();
-        var range = XLSX.utils.decode_range(ws["!ref"] || "A1:A1");
-        var hasData = !!ws["!ref"];
-        var nrows = hasData ? range.e.r - range.s.r + 1 : 0;
-        var ncols = hasData ? range.e.c - range.s.c + 1 : 0;
-        if (!hasData) {
-            nrows = MIN_ROWS;
-            ncols = MIN_COLS;
-        } else if (options.customEditor) {
-            nrows += 20;
-            ncols += 2;
-        }
-        view = { r0: hasData ? range.s.r : 0, c0: hasData ? range.s.c : 0, nrows: nrows, ncols: ncols };
-
-        var cols = [{
-            title: "",
-            field: "__rn",
-            formatter: function (cell) { return String(view.r0 + cell.getData().__r + 1); },
-            hozAlign: "right",
-            headerSort: false,
-            resizable: false,
-            frozen: true,
-            cssClass: "row-header"
-        }];
-        var wcols = ws["!cols"] || [];
-        for (var c = 0; c < ncols; c++) {
-            (function (c) {
-                var info = wcols[view.c0 + c];
-                var width = 90;
-                if (info) {
-                    if (info.wpx) width = info.wpx;
-                    else if (info.wch) width = Math.round(info.wch * 7 + 5);
-                    else if (info.width) width = Math.round(info.width * 7 + 5);
-                }
-                cols.push({
-                    title: XLSX.utils.encode_col(view.c0 + c),
-                    field: "c" + c,
-                    width: width,
-                    sorter: mixedSorter,
-                    headerFilter: "input",
-                    headerFilterFunc: containsFilter,
-                    formatter: function (cell) {
-                        return esc(displayText(cellAt(currentSheet(), view.r0 + cell.getData().__r, view.c0 + c)));
-                    },
-                    editor: options.customEditor ? textEditor(c) : false
-                });
-            })(c);
-        }
-
-        var data = new Array(nrows);
-        for (var r = 0; r < nrows; r++) {
-            var row = { __r: r };
-            for (var c = 0; c < ncols; c++) {
-                row["c" + c] = rawValue(cellAt(ws, view.r0 + r, view.c0 + c));
-            }
-            data[r] = row;
-        }
-
-        var opts = {
-            index: "__r",
-            height: "100%",
-            layout: "fitData",
-            columns: cols,
-            columnDefaults: { headerSortTristate: true },
-            editTriggerEvent: "dblclick",
-            selectableRows: false,
-            renderHorizontal: ncols > 40 ? "virtual" : "basic"
-        };
-        if (saved) {
-            if (saved.sorters && saved.sorters.length) opts.initialSort = saved.sorters;
-            if (saved.filters && saved.filters.length) opts.initialHeaderFilter = saved.filters;
-        }
-        table = new Tabulator("#sheet", opts);
-        table.on("tableBuilt", function () {
-            table.setData(data).then(function () {
-                var holder = table.element.querySelector(".tabulator-tableholder");
-                if (saved && holder) {
-                    holder.scrollTop = saved.scrollTop || 0;
-                    holder.scrollLeft = saved.scrollLeft || 0;
-                }
-                ready = true;
-                preserveState();
-            });
-            var h = table.element.querySelector(".tabulator-tableholder");
-            if (h) {
-                h.addEventListener("scroll", function () {
-                    clearTimeout(scrollTimer);
-                    scrollTimer = setTimeout(preserveState, 300);
-                });
-            }
-        });
-        table.on("dataSorted", preserveState);
-        table.on("dataFiltered", preserveState);
-        table.on("cellEdited", onCellEdited);
-    }
-
-    function loadWorkbook(bytes) {
-        if (!bytes || bytes.length === 0) {
-            wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[]]), "Sheet1");
-        } else {
-            wb = XLSX.read(bytes, { type: "array", cellNF: true, cellText: true, cellFormula: true });
-        }
-        if (!wb.SheetNames.length) {
-            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[]]), "Sheet1");
-        }
-        undoStack = [];
-        redoStack = [];
-        var saved = savedState();
-        var idx = saved && saved.selectedSheetIndex >= 0 && saved.selectedSheetIndex < wb.SheetNames.length ? saved.selectedSheetIndex : 0;
-        showSheet(idx, saved && saved.selectedSheetIndex === idx ? saved : null);
+        const tx = redoStack.pop(); if (!tx) return;
+        if (tx.si !== active) showSheet(tx.si);
+        for (const it of tx.items) providerFor(it.si !== undefined ? it.si : tx.si).restoreSlot(it.r, it.c, it.after);
+        calc = null;
+        undoStack.push(tx); undoCells += tx.items.length;
+        shell.grid.refresh(); shell._updateAll();
     }
 
     function getBytes() {
-        var out = XLSX.write(wb, { bookType: "xlsx", type: "array" });
-        return new Uint8Array(out);
+        const edits = [];
+        providers.forEach(function (p, si) { if (p.dirty) Array.prototype.push.apply(edits, p.pendingEdits(si)); });
+        if (!edits.length) return bytes;
+        try {
+            return OX.patchXlsx(bytes, edits);
+        } catch (err) {
+            const msg = 'Could not save your edits: ' + (err && err.message ? err.message : err);
+            shell.setMessage(msg);
+            throw new Error(msg);
+        }
     }
 
-    excelApp = {
-        load: function (content) {
-            var data = content && content.data !== undefined ? content.data : content;
-            loadWorkbook(new Uint8Array(data));
-        },
-        getBytes: getBytes,
+    window.oxExcel = {
+        load: load,
         undo: undo,
-        redo: redo
+        redo: redo,
+        getBytes: getBytes
     };
 
+    createShell();
+    shell.setMessage('Opening...');
     vscode.postMessage({ refresh: true });
 }
 
 function handleEvents() {
-    window.addEventListener("message", event => {
-        var d = event.data;
-        if (!excelApp) return;
-        if (d.refresh) {
-            excelApp.load(d.content);
+    window.addEventListener('message', function (event) {
+        const d = event.data, app = window.oxExcel;
+        if (!app) return;
+        if (d.refresh) app.load(d.content);
+        else if (d.type === 'getData') {
+            let body, error = null;
+            try { body = app.getBytes(); } catch (err) { error = (err && err.message) || String(err); }
+            if (error !== null) sendMessage({ response: true, requestId: d.requestId, error: error });
+            else sendMessage({ response: true, requestId: d.requestId, body: body });
         }
-        else if (d.type == "getData") {
-            sendMessage({
-                response: true,
-                requestId: d.requestId,
-                body: excelApp.getBytes()
-            });
-        }
-        else if (d.undo) {
-            excelApp.undo();
-        }
-        else if (d.redo) {
-            excelApp.redo();
-        }
-        else if (d.content && !d.type) {
-            excelApp.load(d.content);
-        }
+        else if (d.undo) app.undo();
+        else if (d.redo) app.redo();
+        else if (d.content && !d.type) app.load(d.content);
     });
 }
