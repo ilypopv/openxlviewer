@@ -1,8 +1,27 @@
 # OpenXL Viewer
 
-VS Code extension for viewing and editing CSV, TSV and XLSX files in a fast canvas-based spreadsheet grid (smooth scrolling on very large files). XLSX files are read by a built-in reader and saved by patching the original file, so styles, charts, drawings and conditional formatting you did not touch are kept as they are. Bundled third-party code: fflate (MIT) and SSF (Apache-2.0).
+[![Marketplace version](https://img.shields.io/visual-studio-marketplace/v/ilypopv.openxlviewer?label=Marketplace&color=1f9d6b)](https://marketplace.visualstudio.com/items?itemName=ilypopv.openxlviewer)
+[![Installs](https://img.shields.io/visual-studio-marketplace/i/ilypopv.openxlviewer?color=1f9d6b)](https://marketplace.visualstudio.com/items?itemName=ilypopv.openxlviewer)
+
+View and edit **XLSX, CSV and TSV** files right inside VS Code, in a fast canvas-based spreadsheet grid that stays smooth on very large files. XLSX files are read by a built-in reader and saved by patching the original file, so styles, charts, drawings and conditional formatting you did not touch are kept as they are.
+
+## Screenshots
+
+**Excel Editor**: sheet tabs, cell styles, merged cells, frozen panes, number formats, formula bar.
+
+![Excel Editor showing a workbook with sheet tabs](docs/images/excel.png)
+
+**CSV Editor**: header row, live selection statistics, sorting and filtering, edits written straight into the text file.
+
+![CSV Editor showing a large table](docs/images/csv.png)
 
 ## Install
+
+The extension is available in the Visual Studio Marketplace:
+[**ilypopv.openxlviewer**](https://marketplace.visualstudio.com/items?itemName=ilypopv.openxlviewer).
+
+- In VS Code open Extensions (`Ctrl/Cmd+Shift+X`) and search for **OpenXL Viewer**, or
+- press `Ctrl/Cmd+P` and run `ext install ilypopv.openxlviewer`.
 
 From source:
 
@@ -16,6 +35,8 @@ code --install-extension openxlviewer.vsix --force
 
 Then run `Developer: Reload Window`.
 
+If you have the older "Spreadsheet Viewer" extension installed, disable it: both would compete for `.xlsx` and `.csv` files.
+
 ## Usage
 
 - **XLSX / XLSM** open in the Excel Editor by default: sheet tabs, cell styles, merged cells, frozen panes, number formats, hyperlinks (Ctrl/Cmd+click opens http, https and mailto links). Edit a cell by typing or F2; Enter commits, Alt+Enter inserts a newline, Esc cancels. Typed formulas are stored and recalculated live by a built-in engine (about 150 functions); cached values are written with the file and Excel recomputes on open. Undo/redo and Save go through VS Code. If saving fails you get an error and the document stays unsaved. `Excel: Open Preview` opens a read-only view.
@@ -26,9 +47,10 @@ Then run `Developer: Reload Window`.
 ## How it works
 
 - The grid is drawn on a canvas, so very large sheets scroll smoothly. Sorting, filtering and find are time-sliced and never change the file.
-- XLSX is read by an own streaming reader (no SheetJS) and saved by an own patcher that rewrites only the edited cells and keeps every other part of the package (styles, charts, drawings, conditional formatting, data validation) byte for byte.
+- XLSX is read by an own streaming reader and saved by an own patcher that rewrites only the edited cells and keeps every other part of the package (styles, charts, drawings, conditional formatting, data validation) byte for byte.
 - CSV/TSV use a byte index over the text; edits are written into the text document as line edits, so undo, save and diff work as usual. Files over 4M characters are streamed to the view in chunks.
 - Formulas: about 150 functions (math, text, logical, lookup, date, statistics, financial basics) recalculate when a precedent changes.
+- Bundled third-party code: fflate (MIT) and SSF (Apache-2.0).
 
 ## Limitations
 
@@ -46,4 +68,5 @@ Then run `Developer: Reload Window`.
 
 - `npm run compile` / `npm run watch` builds the extension host into `dist/`.
 - Press F5 ("Launch Extension") to debug, then open any CSV/XLSX file in the new window.
-- Webview code is plain JavaScript in `out/csv.js` and `out/excel.js` (no build step).
+- Webview code is plain JavaScript in `out/` (no build step); `npm test` runs the unit tests.
+- Screenshots for this README live in `docs/images/` and are excluded from the extension package.
