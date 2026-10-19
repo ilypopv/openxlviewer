@@ -16,3 +16,4 @@ GRIDCRAFT_REPORT.md
 *.xlsx
 txt
 img/icon.svg
+docs/**
