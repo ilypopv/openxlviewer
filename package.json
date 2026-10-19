@@ -2,7 +2,7 @@
     "name": "openxlviewer",
     "displayName": "OpenXL Viewer",
     "description": "View and edit CSV, TSV and XLSX files in VS Code.",
-    "version": "2.0.0",
+    "version": "2.0.1",
     "publisher": "ilypopv",
     "icon": "img/icon.png",
     "author": {
