@@ -4,6 +4,7 @@
     "description": "View and edit CSV, TSV and XLSX files in VS Code.",
     "version": "2.0.0",
     "publisher": "ilypopv",
+    "icon": "img/icon.png",
     "author": {
         "name": "Ilya Popov",
         "url": "https://github.com/ilypopv"
