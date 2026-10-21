@@ -23,7 +23,7 @@ If the older "Spreadsheet Viewer" extension is installed, disable it so the two 
 ## Use
 
 - **Excel files** open in the Excel Editor automatically.
-- **CSV / TSV**: right-click the file, choose **Open With...**, then **CSV Editor**. For a read-only view run `CSV: Open Preview` (`Shift+Cmd/Ctrl+V`).
+- **CSV / TSV**: right-click the file, choose **Open With...**, then **CSV Editor** (or make it the default, see [Configuring VS Code](#configuring-vs-code)). For a read-only view run `CSV: Open Preview` (`Shift+Cmd/Ctrl+V`).
 
 | Action            | Shortcut                    |
 | ----------------- | --------------------------- |
@@ -42,7 +42,32 @@ If the older "Spreadsheet Viewer" extension is installed, disable it so the two 
 
 ## Settings
 
-Open Settings and search for `csv-preview` to change the separator, header row, line numbers, number format and more.
+### Configuring VS Code
+
+You can make xl the default editor for your spreadsheet files by setting `workbench.editorAssociations` in `settings.json`:
+
+```json
+{
+    "workbench.editorAssociations": {
+        "*.csv": "xl-csv-editor",
+        "*.tsv": "xl-csv-editor",
+        "*.xlsx": "xl-excel-editor"
+    }
+}
+```
+
+Without it, Excel files already open in xl and CSV files open in the regular text editor (use **Open With...** to switch).
+
+### Configuring xl
+
+Open Settings and search for `csv-preview` to change the separator, header row, line numbers, number format and more. For example:
+
+```json
+{
+    "csv-preview.separator": ";",
+    "csv-preview.lineNumbers": "ordinal"
+}
+```
 
 ## Development
 
