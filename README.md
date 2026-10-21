@@ -1,8 +1,8 @@
-# OpenXL Viewer
+# xl
 
 View and edit **Excel and CSV files** in VS Code. Fast on huge files, and it keeps your workbook's formatting intact.
 
-[![Install from the VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Install%20from%20Marketplace-1f9d6b?logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=ilypopv.openxlviewer)
+[![Install from the VS Code Marketplace](https://img.shields.io/badge/VS%20Code-Install%20from%20Marketplace-1f9d6b?logo=visualstudiocode&logoColor=white)](https://marketplace.visualstudio.com/items?itemName=ilypopv.xl)
 
 <img src="docs/images/excel.png" alt="Excel Editor" width="49%"> <img src="docs/images/csv.png" alt="CSV Editor" width="49%">
 
@@ -17,7 +17,7 @@ View and edit **Excel and CSV files** in VS Code. Fast on huge files, and it kee
 
 ## Install
 
-Search for **OpenXL Viewer** in the Extensions view, or run `ext install ilypopv.openxlviewer`.
+Search for **xl** in the Extensions view, or run `ext install ilypopv.xl`.
 If the older "Spreadsheet Viewer" extension is installed, disable it so the two do not compete for the same files.
 
 ## Use
@@ -49,7 +49,7 @@ Open Settings and search for `csv-preview` to change the separator, header row, 
 ```bash
 npm install
 npm test
-npm run package   # builds openxlviewer.vsix
+npm run package   # builds xl.vsix
 ```
 
 Press `F5` to debug.
