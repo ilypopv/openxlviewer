@@ -9,7 +9,6 @@ webpack.config.js
 data/**
 node_modules/**
 CLAUDE.md
-GRIDCRAFT_REPORT.md
 *_REPORT.md
 *REPORT*.md
 *.vsix
@@ -17,3 +16,9 @@ GRIDCRAFT_REPORT.md
 txt
 img/icon.svg
 docs/**
+.editorconfig
+.prettierrc.json
+.prettierignore
+eslint.config.js
+.github/**
+img/icon-xl.*
