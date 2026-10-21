@@ -6,6 +6,7 @@ require('../out/core/csv-provider.js');
 require('../out/core/format.js');
 require('../out/core/grid-core.js');
 require('../out/core/app-shell.js');
+const { budget } = require('./helpers/timing.js');
 
 let seed = 987654321;
 const rnd = n => {
@@ -208,11 +209,13 @@ test('sorting 600k rows never blocks the event loop for long', async () => {
     for (const c of [0, 1]) {
         const sh = mkShell(p, 1);
         let max = 0,
+            ticks = 0,
             last = performance.now();
         const iv = setInterval(() => {
             const t = performance.now();
             max = Math.max(max, t - last);
             last = t;
+            ticks++;
         }, 1);
         sh.sortBy(c, 1);
         await done(sh);
@@ -224,7 +227,8 @@ test('sorting 600k rows never blocks the event loop for long', async () => {
             if (c === 0) assert.ok(Number(a) <= Number(b));
             else assert.ok(a.toLowerCase() <= b.toLowerCase());
         }
-        assert.ok(max < 120, 'longest stall ' + max.toFixed(0) + ' ms (col ' + c + ')');
+        assert.ok(ticks >= 3, 'the sort ran as one block: only ' + ticks + ' event-loop turns (col ' + c + ')');
+        assert.ok(max < budget(120), 'longest stall ' + max.toFixed(0) + ' ms (col ' + c + ')');
     }
 });
 
@@ -262,7 +266,7 @@ test('stats: selections are computed in the background, whole columns come from 
     sh._statKey = null;
     sh._runStats(sel);
     await done(sh);
-    assert.ok(performance.now() - t0 < 50, 'cached whole-column stats');
+    assert.ok(performance.now() - t0 < budget(50), 'cached whole-column stats');
     // select-all style multi column
     const all = { active: { r: 0, c: 0 }, ranges: [{ r1: 0, c1: 0, r2: n, c2: 2 }] };
     const s2 = mkShell(p, 1, all);
