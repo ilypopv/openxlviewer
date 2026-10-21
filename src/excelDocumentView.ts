@@ -1,5 +1,14 @@
 'use strict';
-import { window, workspace, WebviewPanel, ExtensionContext, ViewColumn, CancellationToken, Disposable, RelativePattern } from 'vscode';
+import {
+    window,
+    workspace,
+    WebviewPanel,
+    ExtensionContext,
+    ViewColumn,
+    CancellationToken,
+    Disposable,
+    RelativePattern
+} from 'vscode';
 import { URI, Utils } from 'vscode-uri';
 import { safeJson, makeNonce, csp } from './html';
 import BaseDocumentView from './baseDocumentView';
@@ -17,7 +26,13 @@ export function toWorkbookBytes(body: any): Uint8Array | undefined {
         out = new Uint8Array(body);
     } else if (ArrayBuffer.isView(body)) {
         out = new Uint8Array(body.buffer, body.byteOffset, body.byteLength);
-    } else if (body && typeof body === 'object' && Number.isInteger(body.length) && body.length > 0 && body.length <= MAX_FILE_BYTES) {
+    } else if (
+        body &&
+        typeof body === 'object' &&
+        Number.isInteger(body.length) &&
+        body.length > 0 &&
+        body.length <= MAX_FILE_BYTES
+    ) {
         out = Uint8Array.from(body as ArrayLike<number>); // structured-clone fallback for array-likes
     }
     if (!out || out.length < 4 || out.length > MAX_FILE_BYTES || out[0] !== 0x50 || out[1] !== 0x4b) {
@@ -27,10 +42,9 @@ export function toWorkbookBytes(body: any): Uint8Array | undefined {
 }
 
 export default class ExcelDocumentView extends BaseDocumentView {
-
     static create(context: ExtensionContext, uri: URI, viewColumn: ViewColumn): ExcelDocumentView {
         let preview = new ExcelDocumentView(context, uri);
-        preview.scheme = "excel-preview";
+        preview.scheme = 'excel-preview';
         preview.initWebviewPanel(viewColumn);
         preview.initialize();
         return preview;
@@ -38,14 +52,13 @@ export default class ExcelDocumentView extends BaseDocumentView {
 
     static revive(context: ExtensionContext, uri: URI, webviewPanel: WebviewPanel): ExcelDocumentView {
         let preview = new ExcelDocumentView(context, uri);
-        preview.scheme = "excel-preview";
+        preview.scheme = 'excel-preview';
         preview.attachWebviewPanel(webviewPanel);
         preview.initialize();
         return preview;
     }
 
-    public getOptions(): any {    
-
+    public getOptions(): any {
         return {
             customEditor: this.hasCustomEditor,
             uri: this.uri.toString(),
@@ -56,34 +69,40 @@ export default class ExcelDocumentView extends BaseDocumentView {
 
     private _document: ExcelDocument;
     private _requestId = 0;
-    private readonly _pending = new Map<number, { resolve: (b: Uint8Array) => void, reject: (e: Error) => void }>();
+    private readonly _pending = new Map<number, { resolve: (b: Uint8Array) => void; reject: (e: Error) => void }>();
 
     public enableEditing(document: ExcelDocument) {
         this._document = document;
-        this.webview.onDidReceiveMessage((e) => {
-            if (!e || typeof e !== 'object') {
-                return;
-            }
-            if (e.changed) {
-                this._document.change(typeof e.reason === 'string' ? e.reason.slice(0, 100) : 'Edit', this);
-            } else if (e.response) {
-                const p = this._pending.get(e.requestId);
-                if (!p) {
+        this.webview.onDidReceiveMessage(
+            e => {
+                if (!e || typeof e !== 'object') {
                     return;
                 }
-                this._pending.delete(e.requestId);
-                if (e.error) {
-                    p.reject(new Error(String(e.error)));
-                } else {
-                    const bytes = toWorkbookBytes(e.body);
-                    if (bytes) {
-                        p.resolve(bytes);
+                if (e.changed) {
+                    this._document.change(typeof e.reason === 'string' ? e.reason.slice(0, 100) : 'Edit', this);
+                } else if (e.response) {
+                    const p = this._pending.get(e.requestId);
+                    if (!p) {
+                        return;
+                    }
+                    this._pending.delete(e.requestId);
+                    if (e.error) {
+                        p.reject(new Error(String(e.error)));
                     } else {
-                        p.reject(new Error('The Excel editor returned no valid workbook data; the file was not written.'));
+                        const bytes = toWorkbookBytes(e.body);
+                        if (bytes) {
+                            p.resolve(bytes);
+                        } else {
+                            p.reject(
+                                new Error('The Excel editor returned no valid workbook data; the file was not written.')
+                            );
+                        }
                     }
                 }
-            }
-        }, this, this._disposables);
+            },
+            this,
+            this._disposables
+        );
     }
 
     // Asks the webview for the current workbook bytes; rejects on webview error, cancellation, close or timeout.
@@ -96,7 +115,9 @@ export default class ExcelDocumentView extends BaseDocumentView {
             let sub: Disposable | undefined;
             const done = () => {
                 clearTimeout(timer);
-                if (sub) { sub.dispose(); }
+                if (sub) {
+                    sub.dispose();
+                }
                 this._pending.delete(id);
             };
             const timer = setTimeout(() => {
@@ -104,11 +125,20 @@ export default class ExcelDocumentView extends BaseDocumentView {
                 reject(new Error('Timed out waiting for the Excel editor to produce the file.'));
             }, DATA_TIMEOUT_MS);
             if (token) {
-                sub = token.onCancellationRequested(() => { done(); reject(new Error('Cancelled.')); });
+                sub = token.onCancellationRequested(() => {
+                    done();
+                    reject(new Error('Cancelled.'));
+                });
             }
             this._pending.set(id, {
-                resolve: (b) => { done(); resolve(b); },
-                reject: (e) => { done(); reject(e); }
+                resolve: b => {
+                    done();
+                    resolve(b);
+                },
+                reject: e => {
+                    done();
+                    reject(e);
+                }
             });
             this.webview.postMessage({ type: 'getData', requestId: id });
         });
@@ -119,13 +149,20 @@ export default class ExcelDocumentView extends BaseDocumentView {
         if (!this.hasCustomEditor) {
             // read-only preview: follow the file on disk
             let timer: any;
-            const watcher = workspace.createFileSystemWatcher(new RelativePattern(Utils.dirname(this.uri) as any, Utils.basename(this.uri)));
+            const watcher = workspace.createFileSystemWatcher(
+                new RelativePattern(Utils.dirname(this.uri) as any, Utils.basename(this.uri))
+            );
             const reload = () => {
                 clearTimeout(timer);
-                timer = setTimeout(() => { if (!this._disposed) { this.refresh(); } }, 300);
+                timer = setTimeout(() => {
+                    if (!this._disposed) {
+                        this.refresh();
+                    }
+                }, 300);
             };
-            this._disposables.push(watcher, watcher.onDidChange(reload), watcher.onDidCreate(reload),
-                { dispose: () => clearTimeout(timer) });
+            this._disposables.push(watcher, watcher.onDidChange(reload), watcher.onDidCreate(reload), {
+                dispose: () => clearTimeout(timer)
+            });
         }
     }
 
@@ -149,16 +186,19 @@ export default class ExcelDocumentView extends BaseDocumentView {
             });
             return;
         }
-        workspace.fs.readFile(this.uri).then(buffer => {
-            if (!this._disposed) {
-                this.webview.postMessage({
-                    refresh: true,
-                    content: buffer
-                });
+        workspace.fs.readFile(this.uri).then(
+            buffer => {
+                if (!this._disposed) {
+                    this.webview.postMessage({
+                        refresh: true,
+                        content: buffer
+                    });
+                }
+            },
+            reason => {
+                window.showInformationMessage(String((reason && reason.message) || reason));
             }
-        }, reason => {
-            window.showInformationMessage(String((reason && reason.message) || reason));
-        });
+        );
     }
 
     undo(): void {
@@ -172,7 +212,7 @@ export default class ExcelDocumentView extends BaseDocumentView {
             redo: true
         });
     }
-    
+
     getHtml(ignoreState: boolean = false): string {
         const s = this.scriptUri;
         const nonce = makeNonce();
@@ -212,7 +252,7 @@ export default class ExcelDocumentView extends BaseDocumentView {
     }
 
     get viewType(): string {
-        return "openxlviewer-excel-preview";
+        return 'openxlviewer-excel-preview';
     }
 
     get configurable(): boolean {
