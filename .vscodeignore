@@ -21,4 +21,4 @@ docs/**
 .prettierignore
 eslint.config.js
 .github/**
-img/icon-xl.*
+img/icon-*
