@@ -53,3 +53,9 @@ npm run package   # builds xl.vsix
 ```
 
 Press `F5` to debug.
+
+<div align="center">
+  <a target="_blank" href="https://ilypopv.github.io">
+    <img src="docs/images/made-by-ilypopv.png" alt="Made by ilypopv" width="192">
+  </a>
+</div>
