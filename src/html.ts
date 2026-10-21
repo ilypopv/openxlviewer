@@ -16,9 +16,13 @@ export function makeNonce(): string {
     if (g && g.getRandomValues) {
         g.getRandomValues(bytes);
     } else {
-        for (let i = 0; i < bytes.length; i++) { bytes[i] = Math.floor(Math.random() * 256); }
+        for (let i = 0; i < bytes.length; i++) {
+            bytes[i] = Math.floor(Math.random() * 256);
+        }
     }
-    for (let i = 0; i < bytes.length; i++) { out += chars[bytes[i] % chars.length]; }
+    for (let i = 0; i < bytes.length; i++) {
+        out += chars[bytes[i] % chars.length];
+    }
     return out;
 }
 
