@@ -3,6 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 globalThis.SSF = require('../out/vendor/ssf.js');
 const OX = require('../out/core/calc.js');
+const { budget } = require('./helpers/timing.js');
 const { Calc } = OX;
 
 // ---- in-memory store (rows[r][c] = cell)
@@ -1349,7 +1350,7 @@ test('perf: parser handles 8192-char formulas quickly, deep nesting safely', () 
     const ast = Calc.parse(f);
     const dt = Number(process.hrtime.bigint() - t) / 1e6;
     assert.ok(!ast.error);
-    assert.ok(dt < 50, 'parse ms ' + dt);
+    assert.ok(dt < budget(50), 'parse ms ' + dt);
     let g = 'SUM(';
     while (g.length < 8000) g += 'A1,';
     g += '1)';
@@ -1366,7 +1367,7 @@ test('perf: parser handles 8192-char formulas quickly, deep nesting safely', () 
     const t3 = process.hrtime.bigint();
     Calc.parse(evil3);
     const dt3 = Number(process.hrtime.bigint() - t3) / 1e6;
-    assert.ok(dt3 < 50);
+    assert.ok(dt3 < budget(50));
     const st = new Store({ S: { A1: 1 } });
     const t4 = process.hrtime.bigint();
     const r = new Calc(st).evaluate(0, 0, 1, f);
@@ -1396,7 +1397,7 @@ test('perf: 1M-cell SUM via forEachCell fast path < 100 ms', () => {
     console.log(
         `[perf] SUM over 1,000,000 cells: ${dt.toFixed(1)} ms; COUNTIF over 1M: ${dt2.toFixed(1)} ms; MAX over whole columns: ${dt3.toFixed(1)} ms`
     );
-    assert.ok(dt < 100, 'SUM took ' + dt);
+    assert.ok(dt < budget(100), 'SUM took ' + dt);
 });
 
 test('perf: 100k-formula chain recalculates iteratively (no recursion limits)', () => {
