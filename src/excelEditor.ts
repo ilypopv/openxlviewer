@@ -20,7 +20,7 @@ export class ExcelEditorProvider implements vscode.CustomEditorProvider<ExcelDoc
         return providerRegistration;
     }
 
-    private static readonly viewType = 'openxlviewer-excel-editor';
+    private static readonly viewType = 'xl-excel-editor';
 
     constructor(private readonly context: vscode.ExtensionContext) {}
 
