@@ -9,7 +9,7 @@ export function isSafeLink(url: string): boolean {
 
 export function openExternalLink(url: string) {
     if (!isSafeLink(url)) {
-        window.showWarningMessage('OpenXL Viewer only opens http, https and mailto links.');
+        window.showWarningMessage('xl only opens http, https and mailto links.');
         return;
     }
     env.openExternal(Uri.parse(url.trim()));
