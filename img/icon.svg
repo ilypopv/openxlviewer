@@ -1,64 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="OpenXL Viewer">
-  <defs>
-    <!-- Background: emerald to deep teal, top-left to bottom-right -->
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#3DDC97"/>
-      <stop offset="0.55" stop-color="#12A06B"/>
-      <stop offset="1" stop-color="#0A6B5E"/>
-    </linearGradient>
-    <!-- Soft light from the top-left corner -->
-    <radialGradient id="glow" cx="0.18" cy="0.12" r="0.75">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.38"/>
-      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
-    </radialGradient>
-    <!-- Card -->
-    <linearGradient id="card" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#EEF7F2"/>
-    </linearGradient>
-    <filter id="lift" x="-20%" y="-20%" width="140%" height="150%" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="7" stdDeviation="8" flood-color="#032B22" flood-opacity="0.32"/>
-    </filter>
-    <clipPath id="cardClip"><rect x="48" y="58" width="160" height="140" rx="22"/></clipPath>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="xl">
+  <!-- Flat, geometric monogram on a dark plum tile: x (two crossing bars) + l (one bar) -->
+  <rect width="256" height="256" rx="56" fill="#261230"/>
+  <rect x="1" y="1" width="254" height="254" rx="55" fill="none" stroke="#FFFFFF" stroke-opacity="0.08" stroke-width="2"/>
 
-  <!-- App tile -->
-  <rect width="256" height="256" rx="58" fill="url(#bg)"/>
-  <rect width="256" height="256" rx="58" fill="url(#glow)"/>
-  <rect x="1" y="1" width="254" height="254" rx="57" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="2"/>
-
-  <!-- Sheet card -->
-  <g filter="url(#lift)">
-    <rect x="48" y="58" width="160" height="140" rx="22" fill="url(#card)"/>
+  <g fill="none" stroke-width="28" stroke-linecap="round">
+    <!-- x: back bar, then front bar on top -->
+    <path d="M142 114 78 178" stroke="#B79CFF"/>
+    <path d="M78 114 142 178" stroke="#D7FF64"/>
+    <!-- l -->
+    <path d="M178 78v100" stroke="#8B6CFF"/>
   </g>
-  <g clip-path="url(#cardClip)">
-    <!-- Header band -->
-    <rect x="48" y="58" width="160" height="34" fill="#CFEFE0"/>
-    <!-- Grid lines -->
-    <g stroke="#B7DCCB" stroke-width="2">
-      <path d="M48 92H208M48 127H208M48 162H208"/>
-      <path d="M88 58V198M128 58V198M168 58V198"/>
-    </g>
-    <!-- Header labels -->
-    <g fill="#1A8F63">
-      <rect x="58" y="71" width="20" height="8" rx="4"/>
-      <rect x="98" y="71" width="20" height="8" rx="4"/>
-      <rect x="138" y="71" width="20" height="8" rx="4"/>
-      <rect x="178" y="71" width="20" height="8" rx="4"/>
-    </g>
-    <!-- Data marks -->
-    <g fill="#8CCBB0">
-      <rect x="58" y="106" width="16" height="7" rx="3.5"/>
-      <rect x="98" y="106" width="22" height="7" rx="3.5"/>
-      <rect x="178" y="106" width="14" height="7" rx="3.5"/>
-      <rect x="58" y="141" width="22" height="7" rx="3.5"/>
-      <rect x="138" y="141" width="18" height="7" rx="3.5"/>
-      <rect x="98" y="176" width="16" height="7" rx="3.5"/>
-      <rect x="178" y="176" width="22" height="7" rx="3.5"/>
-    </g>
-  </g>
-
-  <!-- Selected cell with fill handle -->
-  <rect x="127" y="126" width="42" height="37" rx="6" fill="#2F7BFF" fill-opacity="0.14" stroke="#2F7BFF" stroke-width="4.5"/>
-  <rect x="163" y="157" width="11" height="11" rx="3" fill="#2F7BFF" stroke="#FFFFFF" stroke-width="2.5"/>
 </svg>
