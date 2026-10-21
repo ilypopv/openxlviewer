@@ -17,11 +17,13 @@ const base = {
         vscode: 'commonjs vscode'
     },
     module: {
-        rules: [{
-            test: /\.ts$/,
-            exclude: /node_modules/,
-            use: [{ loader: 'ts-loader' }]
-        }]
+        rules: [
+            {
+                test: /\.ts$/,
+                exclude: /node_modules/,
+                use: [{ loader: 'ts-loader' }]
+            }
+        ]
     }
 };
 
@@ -36,9 +38,7 @@ const webConfig = {
             path: require.resolve('path-browserify')
         }
     },
-    plugins: [
-        new webpack.ProvidePlugin({ process: 'process/browser' })
-    ]
+    plugins: [new webpack.ProvidePlugin({ process: 'process/browser' })]
 };
 
 // One bundle for desktop and web: the webworker build only uses workspace.fs and has no Node requires.
