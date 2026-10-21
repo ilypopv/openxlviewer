@@ -1,0 +1,14 @@
+<svg width="192" height="30" viewBox="0 0 192 30" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Made by ilypopv" shape-rendering="crispEdges">
+  <!-- Pixel-art banner. One art pixel = 2 units. Palette is taken from img/icon.svg. -->
+  <defs>
+    <path id="name" d="M100 6h6v2h-6zM102 8h2v2h-2zM102 10h2v2h-2zM102 12h2v2h-2zM102 14h2v2h-2zM102 16h2v2h-2zM100 18h6v2h-6zM110 6h2v2h-2zM110 8h2v2h-2zM110 10h2v2h-2zM110 12h2v2h-2zM110 14h2v2h-2zM110 16h2v2h-2zM110 18h10v2h-10zM122 6h2v2h-2zM130 6h2v2h-2zM122 8h2v2h-2zM130 8h2v2h-2zM124 10h2v2h-2zM128 10h2v2h-2zM126 12h2v2h-2zM126 14h2v2h-2zM126 16h2v2h-2zM126 18h2v2h-2zM134 6h8v2h-8zM134 8h2v2h-2zM142 8h2v2h-2zM134 10h2v2h-2zM142 10h2v2h-2zM134 12h8v2h-8zM134 14h2v2h-2zM134 16h2v2h-2zM134 18h2v2h-2zM148 6h6v2h-6zM146 8h2v2h-2zM154 8h2v2h-2zM146 10h2v2h-2zM154 10h2v2h-2zM146 12h2v2h-2zM154 12h2v2h-2zM146 14h2v2h-2zM154 14h2v2h-2zM146 16h2v2h-2zM154 16h2v2h-2zM148 18h6v2h-6zM158 6h8v2h-8zM158 8h2v2h-2zM166 8h2v2h-2zM158 10h2v2h-2zM166 10h2v2h-2zM158 12h8v2h-8zM158 14h2v2h-2zM158 16h2v2h-2zM158 18h2v2h-2zM170 6h2v2h-2zM178 6h2v2h-2zM170 8h2v2h-2zM178 8h2v2h-2zM170 10h2v2h-2zM178 10h2v2h-2zM170 12h2v2h-2zM178 12h2v2h-2zM170 14h2v2h-2zM178 14h2v2h-2zM172 16h2v2h-2zM176 16h2v2h-2zM174 18h2v2h-2z"/>
+  </defs>
+  <!-- plate with stepped corners -->
+  <path d="M2 0h188v2h2v26h-2v2h-188v-2h-2v-26h2z" fill="#261230"/>
+  <!-- MADE BY -->
+  <path d="M12 6h2v2h-2zM20 6h2v2h-2zM12 8h4v2h-4zM18 8h4v2h-4zM12 10h2v2h-2zM16 10h2v2h-2zM20 10h2v2h-2zM12 12h2v2h-2zM16 12h2v2h-2zM20 12h2v2h-2zM12 14h2v2h-2zM20 14h2v2h-2zM12 16h2v2h-2zM20 16h2v2h-2zM12 18h2v2h-2zM20 18h2v2h-2zM26 6h6v2h-6zM24 8h2v2h-2zM32 8h2v2h-2zM24 10h2v2h-2zM32 10h2v2h-2zM24 12h10v2h-10zM24 14h2v2h-2zM32 14h2v2h-2zM24 16h2v2h-2zM32 16h2v2h-2zM24 18h2v2h-2zM32 18h2v2h-2zM36 6h8v2h-8zM36 8h2v2h-2zM44 8h2v2h-2zM36 10h2v2h-2zM44 10h2v2h-2zM36 12h2v2h-2zM44 12h2v2h-2zM36 14h2v2h-2zM44 14h2v2h-2zM36 16h2v2h-2zM44 16h2v2h-2zM36 18h8v2h-8zM48 6h10v2h-10zM48 8h2v2h-2zM48 10h2v2h-2zM48 12h8v2h-8zM48 14h2v2h-2zM48 16h2v2h-2zM48 18h10v2h-10zM68 6h8v2h-8zM68 8h2v2h-2zM76 8h2v2h-2zM68 10h2v2h-2zM76 10h2v2h-2zM68 12h8v2h-8zM68 14h2v2h-2zM76 14h2v2h-2zM68 16h2v2h-2zM76 16h2v2h-2zM68 18h8v2h-8zM80 6h2v2h-2zM88 6h2v2h-2zM80 8h2v2h-2zM88 8h2v2h-2zM82 10h2v2h-2zM86 10h2v2h-2zM84 12h2v2h-2zM84 14h2v2h-2zM84 16h2v2h-2zM84 18h2v2h-2z" fill="#B79CFF"/>
+  <!-- ILYPOPV -->
+  <use href="#name" fill="#D7FF64"/>
+  <!-- violet pixel underline -->
+  <path d="M98 22h82v2h-82z" fill="#8B6CFF"/>
+</svg>
