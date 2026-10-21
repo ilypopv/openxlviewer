@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const OX = require('../out/core/grid-core.js');
+const { budget } = require('./helpers/timing.js');
 const C = OX.GridCore;
 
 function rng(seed) {
@@ -174,7 +175,7 @@ test('MergeIndex with millions of merged cells answers fast', () => {
     let hits = 0;
     for (let r = 150000; r < 150060; r++) for (let c = 0; c < 30; c++) if (mi.at(r, c)) hits++;
     assert.equal(hits, 600);
-    assert.ok(Date.now() - t0 < 50);
+    assert.ok(Date.now() - t0 < budget(50));
 });
 
 test('WidthCache stays bounded by entries and chars, skips long strings, keeps hot keys', () => {
