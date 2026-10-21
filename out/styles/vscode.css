@@ -1,4 +1,5 @@
-html, body {
+html,
+body {
     height: 100%;
     margin: 0;
     padding: 0;
@@ -8,96 +9,337 @@ html, body {
     font-family: var(--vscode-font-family, system-ui, sans-serif);
     font-size: var(--vscode-font-size, 13px);
 }
-#app { height: 100%; }
-.ox-app { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+#app {
+    height: 100%;
+}
+.ox-app {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+}
 
 .ox-bar {
-    flex: 0 0 auto; display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px;
-    padding: 4px 8px; box-sizing: border-box;
+    flex: 0 0 auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 6px;
+    padding: 4px 8px;
+    box-sizing: border-box;
     background: var(--vscode-editorWidget-background, var(--vscode-sideBar-background, #252526));
-    border-bottom: 1px solid var(--vscode-editorGroup-border, rgba(128,128,128,.35));
+    border-bottom: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
 }
-.ox-name, .ox-formula, .ox-find-in, .ox-pop-search {
+.ox-name,
+.ox-formula,
+.ox-find-in,
+.ox-pop-search {
     background: var(--vscode-input-background, #3c3c3c);
     color: var(--vscode-input-foreground, #ccc);
     border: 1px solid var(--vscode-input-border, transparent);
-    border-radius: 3px; padding: 3px 6px; font: inherit; outline: none; box-sizing: border-box;
+    border-radius: 3px;
+    padding: 3px 6px;
+    font: inherit;
+    outline: none;
+    box-sizing: border-box;
 }
-.ox-name { width: 96px; text-align: center; }
-.ox-name.bad { border-color: var(--vscode-inputValidation-errorBorder, #f14c4c); }
-.ox-fxbox { position: relative; flex: 1 1 160px; min-width: 0; display: flex; align-items: flex-start; }
-.ox-formula { flex: 1 1 auto; min-width: 0; width: 100%; height: 26px; line-height: 18px; resize: none; overflow: hidden; white-space: pre; font-family: var(--vscode-editor-font-family, monospace); }
-.ox-fxbox.open .ox-formula { height: 110px; overflow: auto; }
-.ox-fxbox.open { z-index: 30; }
-.ox-fxexp { position: absolute; right: 2px; top: 1px; padding: 0 6px; background: var(--vscode-input-background, #3c3c3c); }
-.ox-name:focus, .ox-formula:focus, .ox-find-in:focus, .ox-pop-search:focus { border-color: var(--vscode-focusBorder, #007fd4); }
-.ox-fx { color: var(--vscode-descriptionForeground, #999); font-style: italic; font-family: serif; padding: 0 2px; }
+.ox-name {
+    width: 96px;
+    text-align: center;
+}
+.ox-name.bad {
+    border-color: var(--vscode-inputValidation-errorBorder, #f14c4c);
+}
+.ox-fxbox {
+    position: relative;
+    flex: 1 1 160px;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+}
+.ox-formula {
+    flex: 1 1 auto;
+    min-width: 0;
+    width: 100%;
+    height: 26px;
+    line-height: 18px;
+    resize: none;
+    overflow: hidden;
+    white-space: pre;
+    font-family: var(--vscode-editor-font-family, monospace);
+}
+.ox-fxbox.open .ox-formula {
+    height: 110px;
+    overflow: auto;
+}
+.ox-fxbox.open {
+    z-index: 30;
+}
+.ox-fxexp {
+    position: absolute;
+    right: 2px;
+    top: 1px;
+    padding: 0 6px;
+    background: var(--vscode-input-background, #3c3c3c);
+}
+.ox-name:focus,
+.ox-formula:focus,
+.ox-find-in:focus,
+.ox-pop-search:focus {
+    border-color: var(--vscode-focusBorder, #007fd4);
+}
+.ox-fx {
+    color: var(--vscode-descriptionForeground, #999);
+    font-style: italic;
+    font-family: serif;
+    padding: 0 2px;
+}
 
 .ox-btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
-    background: transparent; color: inherit; border: 1px solid transparent;
-    border-radius: 3px; padding: 3px 7px; font: inherit; cursor: pointer; white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: transparent;
+    color: inherit;
+    border: 1px solid transparent;
+    border-radius: 3px;
+    padding: 3px 7px;
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
 }
-.ox-btn:hover { background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,.25)); }
-.ox-btn:active { background: var(--vscode-toolbar-activeBackground, rgba(128,128,128,.35)); }
-.ox-btn.on { background: var(--vscode-inputOption-activeBackground, rgba(0,127,212,.35)); border-color: var(--vscode-inputOption-activeBorder, #007fd4); }
-.ox-primary { background: var(--vscode-button-background, #0e639c); color: var(--vscode-button-foreground, #fff); }
-.ox-primary:hover { background: var(--vscode-button-hoverBackground, #1177bb); }
-.ox-clear, .ox-add { border-color: var(--vscode-editorGroup-border, rgba(128,128,128,.4)); }
+.ox-btn:hover {
+    background: var(--vscode-toolbar-hoverBackground, rgba(128, 128, 128, 0.25));
+}
+.ox-btn:active {
+    background: var(--vscode-toolbar-activeBackground, rgba(128, 128, 128, 0.35));
+}
+.ox-btn.on {
+    background: var(--vscode-inputOption-activeBackground, rgba(0, 127, 212, 0.35));
+    border-color: var(--vscode-inputOption-activeBorder, #007fd4);
+}
+.ox-primary {
+    background: var(--vscode-button-background, #0e639c);
+    color: var(--vscode-button-foreground, #fff);
+}
+.ox-primary:hover {
+    background: var(--vscode-button-hoverBackground, #1177bb);
+}
+.ox-clear,
+.ox-add {
+    border-color: var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.4));
+}
 
-.ox-grid { position: relative; flex: 1 1 auto; min-height: 0; }
-.ox-grid > .oxg { position: absolute; inset: 0; }
-.ox-pics { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 2; }
-.ox-pics img { position: absolute; padding: 0; margin: 0; pointer-events: none; }
+.ox-grid {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+.ox-grid > .oxg {
+    position: absolute;
+    inset: 0;
+}
+.ox-pics {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 2;
+}
+.ox-pics img {
+    position: absolute;
+    padding: 0;
+    margin: 0;
+    pointer-events: none;
+}
 
 .ox-tabs {
-    flex: 0 0 auto; display: flex; align-items: stretch; gap: 1px; overflow-x: auto; overflow-y: hidden;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: stretch;
+    gap: 1px;
+    overflow-x: auto;
+    overflow-y: hidden;
     background: var(--vscode-editorWidget-background, #252526);
-    border-top: 1px solid var(--vscode-editorGroup-border, rgba(128,128,128,.35));
+    border-top: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
 }
 .ox-tab {
-    background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: 1px solid transparent;
-    padding: 5px 14px; font: inherit; cursor: pointer; white-space: nowrap;
+    background: var(--vscode-button-secondaryBackground);
+    color: var(--vscode-button-secondaryForeground);
+    border: 1px solid transparent;
+    padding: 5px 14px;
+    font: inherit;
+    cursor: pointer;
+    white-space: nowrap;
 }
-.ox-tab:hover { background: var(--vscode-button-secondaryHoverBackground); }
-.ox-tab.active { background: var(--vscode-button-background); color: var(--vscode-button-foreground); font-weight: 600; }
+.ox-tab:hover {
+    background: var(--vscode-button-secondaryHoverBackground);
+}
+.ox-tab.active {
+    background: var(--vscode-button-background);
+    color: var(--vscode-button-foreground);
+    font-weight: 600;
+}
 
 .ox-status {
-    flex: 0 0 auto; display: flex; align-items: center; gap: 18px; padding: 2px 10px; min-height: 22px; box-sizing: border-box;
-    background: var(--vscode-statusBar-background, #007acc); color: var(--vscode-statusBar-foreground, #fff); font-size: 12px;
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    padding: 2px 10px;
+    min-height: 22px;
+    box-sizing: border-box;
+    background: var(--vscode-statusBar-background, #007acc);
+    color: var(--vscode-statusBar-foreground, #fff);
+    font-size: 12px;
 }
-.ox-msg { flex: 1 1 40px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ox-stats { white-space: pre; opacity: .95; flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.ox-zoom { display: inline-flex; align-items: center; gap: 2px; flex: 0 0 auto; }
-.ox-zoom .ox-btn { padding: 0 6px; color: inherit; }
-.ox-zval { min-width: 38px; text-align: center; cursor: pointer; }
+.ox-msg {
+    flex: 1 1 40px;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ox-stats {
+    white-space: pre;
+    opacity: 0.95;
+    flex: 0 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.ox-zoom {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    flex: 0 0 auto;
+}
+.ox-zoom .ox-btn {
+    padding: 0 6px;
+    color: inherit;
+}
+.ox-zval {
+    min-width: 38px;
+    text-align: center;
+    cursor: pointer;
+}
 
 .ox-find {
-    position: absolute; top: 6px; right: 18px; z-index: 20; display: flex; align-items: center; gap: 2px;
-    padding: 4px 6px; border-radius: 4px; box-shadow: 0 2px 10px rgba(0,0,0,.45);
-    background: var(--vscode-editorWidget-background, #252526); border: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,.4));
+    position: absolute;
+    top: 6px;
+    right: 18px;
+    z-index: 20;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 6px;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.45);
+    background: var(--vscode-editorWidget-background, #252526);
+    border: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.4));
 }
-.ox-find { max-width: calc(100% - 28px); box-sizing: border-box; }
-.ox-find-in { width: 190px; flex: 1 1 60px; min-width: 0; }
-.ox-find-count { min-width: 40px; white-space: nowrap; text-align: center; font-size: 12px; opacity: .85; }
-.ox-find-count.none { color: var(--vscode-errorForeground, #f48771); }
-.ox-tog { font-weight: 600; font-size: 11px; }
+.ox-find {
+    max-width: calc(100% - 28px);
+    box-sizing: border-box;
+}
+.ox-find-in {
+    width: 190px;
+    flex: 1 1 60px;
+    min-width: 0;
+}
+.ox-find-count {
+    min-width: 40px;
+    white-space: nowrap;
+    text-align: center;
+    font-size: 12px;
+    opacity: 0.85;
+}
+.ox-find-count.none {
+    color: var(--vscode-errorForeground, #f48771);
+}
+.ox-tog {
+    font-weight: 600;
+    font-size: 11px;
+}
 
 .ox-pop {
-    position: fixed; z-index: 1000; width: 260px; display: flex; flex-direction: column; gap: 6px; padding: 8px; box-sizing: border-box;
-    background: var(--vscode-editorWidget-background, #252526); color: var(--vscode-editorWidget-foreground, inherit);
-    border: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,.5)); border-radius: 5px; box-shadow: 0 4px 16px rgba(0,0,0,.5);
+    position: fixed;
+    z-index: 1000;
+    width: 260px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    box-sizing: border-box;
+    background: var(--vscode-editorWidget-background, #252526);
+    color: var(--vscode-editorWidget-foreground, inherit);
+    border: 1px solid var(--vscode-editorWidget-border, rgba(128, 128, 128, 0.5));
+    border-radius: 5px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 }
-.ox-pop-title { font-weight: 600; }
-.ox-pop-list { height: 264px; overflow: auto; position: relative; border: 1px solid var(--vscode-editorGroup-border, rgba(128,128,128,.35)); border-radius: 3px; padding: 2px 0; }
-.ox-pop-row { display: flex; align-items: center; gap: 6px; padding: 2px 8px; cursor: pointer; }
-.ox-pop-row:hover { background: var(--vscode-list-hoverBackground, rgba(128,128,128,.2)); }
-.ox-pop-row span { flex: 1 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ox-pop-row em { opacity: .55; font-style: normal; font-size: 11px; }
-.ox-pop-btns { display: flex; justify-content: flex-end; gap: 6px; }
+.ox-pop-title {
+    font-weight: 600;
+}
+.ox-pop-list {
+    height: 264px;
+    overflow: auto;
+    position: relative;
+    border: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
+    border-radius: 3px;
+    padding: 2px 0;
+}
+.ox-pop-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 2px 8px;
+    cursor: pointer;
+}
+.ox-pop-row:hover {
+    background: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.2));
+}
+.ox-pop-row span {
+    flex: 1 1 auto;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.ox-pop-row em {
+    opacity: 0.55;
+    font-style: normal;
+    font-size: 11px;
+}
+.ox-pop-btns {
+    display: flex;
+    justify-content: flex-end;
+    gap: 6px;
+}
 
-.ox-pop-mode { width: 100%; box-sizing: border-box; background: var(--vscode-dropdown-background, var(--vscode-input-background)); color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground)); border: 1px solid var(--vscode-editorGroup-border, rgba(128,128,128,.35)); border-radius: 3px; padding: 3px 4px; }
-.ox-pop-info { font-size: 11px; opacity: .7; }
-.ox-pop-spacer { position: relative; }
-.ox-pop-win { position: absolute; left: 0; right: 0; top: 0; }
-.ox-pop-list .ox-pop-row, .ox-pop-all { height: 22px; box-sizing: border-box; }
+.ox-pop-mode {
+    width: 100%;
+    box-sizing: border-box;
+    background: var(--vscode-dropdown-background, var(--vscode-input-background));
+    color: var(--vscode-dropdown-foreground, var(--vscode-input-foreground));
+    border: 1px solid var(--vscode-editorGroup-border, rgba(128, 128, 128, 0.35));
+    border-radius: 3px;
+    padding: 3px 4px;
+}
+.ox-pop-info {
+    font-size: 11px;
+    opacity: 0.7;
+}
+.ox-pop-spacer {
+    position: relative;
+}
+.ox-pop-win {
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+}
+.ox-pop-list .ox-pop-row,
+.ox-pop-all {
+    height: 22px;
+    box-sizing: border-box;
+}
