@@ -21,7 +21,6 @@ function isSaneState(state: any): boolean {
 }
 
 export default abstract class BaseDocumentView {
-    
     private _uri: URI;
     private _previewUri: URI;
     private _scriptUri: URI;
@@ -62,25 +61,26 @@ export default abstract class BaseDocumentView {
     }
 
     public initialize() {
-        this.webview.onDidReceiveMessage((e) => {
-            if (!e || typeof e !== 'object') {
-                return;
-            }
-            if (e.save) {
-                if (isSaneState(e.state)) {
-                    this.state = e.state;
+        this.webview.onDidReceiveMessage(
+            e => {
+                if (!e || typeof e !== 'object') {
+                    return;
                 }
-            }
-            else if (e.refresh) {
-                this.refresh();
-            }
-            else if (e.error) {
-                window.showErrorMessage(String(e.error));
-            }
-            else if (typeof e.openLink === 'string') {
-                openExternalLink(e.openLink);
-            }
-        }, this, this._disposables);
+                if (e.save) {
+                    if (isSaneState(e.state)) {
+                        this.state = e.state;
+                    }
+                } else if (e.refresh) {
+                    this.refresh();
+                } else if (e.error) {
+                    window.showErrorMessage(String(e.error));
+                } else if (typeof e.openLink === 'string') {
+                    openExternalLink(e.openLink);
+                }
+            },
+            this,
+            this._disposables
+        );
 
         this.webview.html = this.getHtml();
     }
@@ -105,15 +105,15 @@ export default abstract class BaseDocumentView {
             this.refresh();
         }
     }
-    
+
     public reload() {
         this.webview.html = this.getHtml(true);
     }
-    
+
     public reveal() {
         this._panel.reveal();
     }
-    
+
     get hasCustomEditor(): boolean {
         return this._customEditor;
     }
@@ -142,15 +142,19 @@ export default abstract class BaseDocumentView {
         this._panel = panel;
         this._previewUri = panel.webview.asWebviewUri(this._uri);
         this._scriptUri = panel.webview.asWebviewUri(Utils.joinPath(this._extensionUri, 'out'));
-        panel.onDidDispose(() => {
-            this.dispose();
-        }, this, this._disposables);
+        panel.onDidDispose(
+            () => {
+                this.dispose();
+            },
+            this,
+            this._disposables
+        );
     }
 
     get isDisposed(): boolean {
         return this._disposed;
     }
-    
+
     set scheme(value: string) {
         this._previewUri = this._uri.with({
             scheme: value
@@ -191,7 +195,9 @@ export default abstract class BaseDocumentView {
 
     public userRefresh() {
         if (this.hasUnsavedEdits) {
-            window.showWarningMessage('This editor has unsaved edits; save or revert first, a refresh would discard them.');
+            window.showWarningMessage(
+                'This editor has unsaved edits; save or revert first, a refresh would discard them.'
+            );
             return;
         }
         this.refresh();
@@ -199,14 +205,16 @@ export default abstract class BaseDocumentView {
 
     public clearState() {
         if (this.hasUnsavedEdits) {
-            window.showWarningMessage('This editor has unsaved edits; save or revert first, then clear the preview state.');
+            window.showWarningMessage(
+                'This editor has unsaved edits; save or revert first, then clear the preview state.'
+            );
             return;
         }
         this.state = null;
         this.reload();
         this.refresh();
     }
-    
+
     abstract get viewType(): string;
     abstract getHtml(ignoreState?: boolean): string;
     abstract refresh(): void;
