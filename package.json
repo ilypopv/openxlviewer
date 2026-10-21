@@ -1,376 +1,385 @@
 {
-    "name": "openxlviewer",
-    "displayName": "OpenXL Viewer",
-    "description": "View and edit CSV, TSV and XLSX files in VS Code.",
-    "version": "2.0.2",
-    "publisher": "ilypopv",
-    "icon": "img/icon.png",
-    "author": {
-        "name": "Ilya Popov",
-        "url": "https://github.com/ilypopv"
+  "name": "openxlviewer",
+  "displayName": "OpenXL Viewer",
+  "description": "View and edit CSV, TSV and XLSX files in VS Code.",
+  "version": "2.0.2",
+  "publisher": "ilypopv",
+  "icon": "img/icon.png",
+  "author": {
+    "name": "Ilya Popov",
+    "url": "https://github.com/ilypopv"
+  },
+  "license": "SEE LICENSE IN LICENSE",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ilypopv/openxlviewer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/ilypopv/openxlviewer/issues"
+  },
+  "homepage": "https://github.com/ilypopv/openxlviewer#readme",
+  "engines": {
+    "vscode": "^1.63.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "CSV",
+    "Excel",
+    "spreadsheet",
+    "viewer",
+    "vscode"
+  ],
+  "activationEvents": [
+    "onCommand:csv.preview",
+    "onCommand:excel.preview",
+    "onCommand:csv.clearState",
+    "onCommand:csv.refresh",
+    "onLanguage:csv",
+    "onLanguage:tsv",
+    "onLanguage:excel",
+    "onWebviewPanel:openxlviewer-csv-preview",
+    "onWebviewPanel:openxlviewer-excel-preview",
+    "onCustomEditor:openxlviewer-csv-editor",
+    "onCustomEditor:openxlviewer-excel-editor"
+  ],
+  "main": "./dist/extension",
+  "browser": "./dist/extension",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": true
     },
-    "license": "SEE LICENSE IN LICENSE",
-    "repository": {
-        "type": "git",
-        "url": "https://github.com/ilypopv/openxlviewer.git"
-    },
-    "bugs": {
-        "url": "https://github.com/ilypopv/openxlviewer/issues"
-    },
-    "homepage": "https://github.com/ilypopv/openxlviewer#readme",
-    "engines": {
-        "vscode": "^1.63.0"
-    },
-    "categories": [
-        "Other"
+    "virtualWorkspaces": true
+  },
+  "contributes": {
+    "languages": [
+      {
+        "id": "csv",
+        "extensions": [
+          ".csv"
+        ],
+        "aliases": [
+          "CSV"
+        ]
+      },
+      {
+        "id": "tsv",
+        "extensions": [
+          ".tsv",
+          ".tab"
+        ],
+        "aliases": [
+          "TSV"
+        ]
+      },
+      {
+        "id": "excel",
+        "extensions": [
+          ".xlsx",
+          ".xlsm"
+        ],
+        "aliases": [
+          "Excel"
+        ]
+      }
     ],
-    "keywords": [
-        "CSV",
-        "Excel",
-        "spreadsheet",
-        "viewer",
-        "vscode"
+    "commands": [
+      {
+        "command": "csv.preview",
+        "category": "CSV",
+        "title": "Open Preview"
+      },
+      {
+        "command": "excel.preview",
+        "category": "Excel",
+        "title": "Open Preview"
+      },
+      {
+        "command": "csv.clearState",
+        "category": "CSV",
+        "title": "Clear Preview State"
+      },
+      {
+        "command": "csv.refresh",
+        "category": "CSV",
+        "title": "Refresh"
+      }
     ],
-    "activationEvents": [
-        "onCommand:csv.preview",
-        "onCommand:excel.preview",
-        "onCommand:csv.clearState",
-        "onCommand:csv.refresh",
-        "onLanguage:csv",
-        "onLanguage:tsv",
-        "onLanguage:excel",
-        "onWebviewPanel:openxlviewer-csv-preview",
-        "onWebviewPanel:openxlviewer-excel-preview",
-        "onCustomEditor:openxlviewer-csv-editor",
-        "onCustomEditor:openxlviewer-excel-editor"
-    ],
-    "main": "./dist/extension",
-    "browser": "./dist/extension",
-    "capabilities": {
-        "untrustedWorkspaces": {
-            "supported": true
+    "menus": {
+      "explorer/context": [
+        {
+          "when": "resourceLangId == excel",
+          "command": "excel.preview",
+          "group": "navigation"
         },
-        "virtualWorkspaces": true
-    },
-    "contributes": {
-        "languages": [
-            {
-                "id": "csv",
-                "extensions": [
-                    ".csv"
-                ],
-                "aliases": [
-                    "CSV"
-                ]
-            },
-            {
-                "id": "tsv",
-                "extensions": [
-                    ".tsv",
-                    ".tab"
-                ],
-                "aliases": [
-                    "TSV"
-                ]
-            },
-            {
-                "id": "excel",
-                "extensions": [
-                    ".xlsx",
-                    ".xlsm"
-                ],
-                "aliases": [
-                    "Excel"
-                ]
-            }
-        ],
-        "commands": [
-            {
-                "command": "csv.preview",
-                "category": "CSV",
-                "title": "Open Preview"
-            },
-            {
-                "command": "excel.preview",
-                "category": "Excel",
-                "title": "Open Preview"
-            },
-            {
-                "command": "csv.clearState",
-                "category": "CSV",
-                "title": "Clear Preview State"
-            },
-            {
-                "command": "csv.refresh",
-                "category": "CSV",
-                "title": "Refresh"
-            }
-        ],
-        "menus": {
-            "explorer/context": [
-                {
-                    "when": "resourceLangId == excel",
-                    "command": "excel.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "resourceLangId == csv",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "resourceLangId == tsv",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "resourceLangId == 'csv (semicolon)'",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "resourceLangId == 'csv (pipe)'",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                }
-            ],
-            "editor/title": [
-                {
-                    "when": "editorLangId == excel",
-                    "command": "excel.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "editorLangId == csv",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "editorLangId == tsv",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "editorLangId == 'csv (semicolon)'",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "editorLangId == 'csv (pipe)'",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                }
-            ],
-            "editor/title/context": [
-                {
-                    "when": "resourceLangId == excel",
-                    "command": "excel.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "resourceLangId == csv",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "resourceLangId == tsv",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "resourceLangId == 'csv (semicolon)'",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                },
-                {
-                    "when": "resourceLangId == 'csv (pipe)'",
-                    "command": "csv.preview",
-                    "group": "navigation"
-                }
-            ],
-            "commandPalette": [
-                {
-                    "command": "csv.preview",
-                    "when": "editorLangId == csv",
-                    "group": "navigation"
-                },
-                {
-                    "command": "csv.preview",
-                    "when": "editorLangId == tsv",
-                    "group": "navigation"
-                },
-                {
-                    "command": "csv.preview",
-                    "when": "editorLangId == 'csv (semicolon)'",
-                    "group": "navigation"
-                },
-                {
-                    "command": "csv.preview",
-                    "when": "editorLangId == 'csv (pipe)'",
-                    "group": "navigation"
-                },
-                {
-                    "command": "excel.preview",
-                    "when": "false"
-                }
-            ]
+        {
+          "when": "resourceLangId == csv",
+          "command": "csv.preview",
+          "group": "navigation"
         },
-        "keybindings": [
-            {
-                "command": "csv.preview",
-                "key": "shift+ctrl+v",
-                "mac": "shift+cmd+v",
-                "when": "editorLangId == csv"
-            },
-            {
-                "command": "csv.preview",
-                "key": "shift+ctrl+v",
-                "mac": "shift+cmd+v",
-                "when": "editorLangId == tsv"
-            },
-            {
-                "command": "csv.preview",
-                "key": "shift+ctrl+v",
-                "mac": "shift+cmd+v",
-                "when": "editorLangId == 'csv (semicolon)'"
-            },
-            {
-                "command": "csv.preview",
-                "key": "shift+ctrl+v",
-                "mac": "shift+cmd+v",
-                "when": "editorLangId == 'csv (pipe)'"
-            }
-        ],
-        "customEditors": [
-            {
-                "viewType": "openxlviewer-csv-editor",
-                "displayName": "CSV Editor",
-                "priority": "option",
-                "selector": [
-                    {
-                        "filenamePattern": "*.csv"
-                    },
-                    {
-                        "filenamePattern": "*.tsv"
-                    },
-                    {
-                        "filenamePattern": "*.tab"
-                    }
-                ]
-            },
-            {
-                "viewType": "openxlviewer-excel-editor",
-                "displayName": "Excel Editor",
-                "priority": "default",
-                "selector": [
-                    {
-                        "filenamePattern": "*.xlsx"
-                    },
-                    {
-                        "filenamePattern": "*.xlsm"
-                    }
-                ]
-            }
-        ],
-        "configuration": {
-            "type": "object",
-            "title": "OpenXL Viewer",
-            "properties": {
-                "csv-preview.separator": {
-                    "type": "string",
-                    "default": ",",
-                    "description": "Specifies the separator used in a CSV file (normally , but also ; is common)."
-                },
-                "csv-preview.quoteMark": {
-                    "type": "string",
-                    "default": "\"",
-                    "description": "Specifies the optional character used to surround individual values in a CSV file."
-                },
-                "csv-preview.hasHeaders": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Specifies whether the first row in a CSV file represents column headers."
-                },
-                "csv-preview.capitalizeHeaders": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "Specifies whether column headers in CSV files are capitalized."
-                },
-                "csv-preview.resizeColumns": {
-                    "type": "string",
-                    "enum": [
-                        "all",
-                        "first",
-                        "none"
-                    ],
-                    "default": "none",
-                    "description": "Specifies whether columns are automatically resized to fit the data for CSV files."
-                },
-                "csv-preview.lineNumbers": {
-                    "type": "string",
-                    "enum": [
-                        "none",
-                        "ordinal",
-                        "source"
-                    ],
-                    "default": "none",
-                    "description": "Specifies whether to display line numbers for CSV files."
-                },
-                "csv-preview.commentCharacter": {
-                    "type": "string",
-                    "default": "#",
-                    "description": "Specifies the character used to mark comment lines in CSV files."
-                },
-                "csv-preview.skipComments": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Specifies whether lines that begin with the comment character should be omitted from the CSV preview."
-                },
-                "csv-preview.formatValues": {
-                    "type": "string",
-                    "enum": [
-                        "always",
-                        "never",
-                        "unquoted"
-                    ],
-                    "default": "always",
-                    "description": "Specifies whether to format numeric values in CSV files, or to treat them as strings."
-                },
-                "csv-preview.numberFormat": {
-                    "type": "string",
-                    "default": "",
-                    "markdownDescription": "Optional [.NET-style format string](https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-numeric-format-strings) used to display numeric values in CSV files (for example `n2`, `f1`, `p0`; `g2` shows 2 significant digits, so 12345 appears as 12000). Leave empty to show numbers unchanged. Only applies when `formatValues` formats numbers; the file is never modified."
-                },
-                "csv-preview.openStdin": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Specifies whether text piped to stdin is automatically opened as a CSV preview."
-                }
-            }
+        {
+          "when": "resourceLangId == tsv",
+          "command": "csv.preview",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceLangId == 'csv (semicolon)'",
+          "command": "csv.preview",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceLangId == 'csv (pipe)'",
+          "command": "csv.preview",
+          "group": "navigation"
         }
+      ],
+      "editor/title": [
+        {
+          "when": "editorLangId == excel",
+          "command": "excel.preview",
+          "group": "navigation"
+        },
+        {
+          "when": "editorLangId == csv",
+          "command": "csv.preview",
+          "group": "navigation"
+        },
+        {
+          "when": "editorLangId == tsv",
+          "command": "csv.preview",
+          "group": "navigation"
+        },
+        {
+          "when": "editorLangId == 'csv (semicolon)'",
+          "command": "csv.preview",
+          "group": "navigation"
+        },
+        {
+          "when": "editorLangId == 'csv (pipe)'",
+          "command": "csv.preview",
+          "group": "navigation"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "when": "resourceLangId == excel",
+          "command": "excel.preview",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceLangId == csv",
+          "command": "csv.preview",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceLangId == tsv",
+          "command": "csv.preview",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceLangId == 'csv (semicolon)'",
+          "command": "csv.preview",
+          "group": "navigation"
+        },
+        {
+          "when": "resourceLangId == 'csv (pipe)'",
+          "command": "csv.preview",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "csv.preview",
+          "when": "editorLangId == csv",
+          "group": "navigation"
+        },
+        {
+          "command": "csv.preview",
+          "when": "editorLangId == tsv",
+          "group": "navigation"
+        },
+        {
+          "command": "csv.preview",
+          "when": "editorLangId == 'csv (semicolon)'",
+          "group": "navigation"
+        },
+        {
+          "command": "csv.preview",
+          "when": "editorLangId == 'csv (pipe)'",
+          "group": "navigation"
+        },
+        {
+          "command": "excel.preview",
+          "when": "false"
+        }
+      ]
     },
-    "scripts": {
-        "vscode:prepublish": "webpack --mode production",
-        "compile": "webpack --mode none",
-        "watch": "webpack --mode none --watch",
-        "package": "vsce package --no-dependencies -o openxlviewer.vsix",
-        "test": "node --test test/*.test.js"
-    },
-    "devDependencies": {
-        "@types/node": "^11.15.54",
-        "@types/vscode": "^1.60.0",
-        "@types/webpack-env": "^1.16.2",
-        "@vscode/vsce": "^3.0.0",
-        "assert": "^2.0.0",
-        "process": "^0.11.10",
-        "ts-loader": "^9.2.5",
-        "typescript": "^4.4.3",
-        "webpack": "^5.52.1",
-        "webpack-cli": "^4.8.0",
-        "xlsx": "^0.18.5"
-    },
-    "dependencies": {
-        "path-browserify": "^1.0.1",
-        "vscode-uri": "^3.0.2"
+    "keybindings": [
+      {
+        "command": "csv.preview",
+        "key": "shift+ctrl+v",
+        "mac": "shift+cmd+v",
+        "when": "editorLangId == csv"
+      },
+      {
+        "command": "csv.preview",
+        "key": "shift+ctrl+v",
+        "mac": "shift+cmd+v",
+        "when": "editorLangId == tsv"
+      },
+      {
+        "command": "csv.preview",
+        "key": "shift+ctrl+v",
+        "mac": "shift+cmd+v",
+        "when": "editorLangId == 'csv (semicolon)'"
+      },
+      {
+        "command": "csv.preview",
+        "key": "shift+ctrl+v",
+        "mac": "shift+cmd+v",
+        "when": "editorLangId == 'csv (pipe)'"
+      }
+    ],
+    "customEditors": [
+      {
+        "viewType": "openxlviewer-csv-editor",
+        "displayName": "CSV Editor",
+        "priority": "option",
+        "selector": [
+          {
+            "filenamePattern": "*.csv"
+          },
+          {
+            "filenamePattern": "*.tsv"
+          },
+          {
+            "filenamePattern": "*.tab"
+          }
+        ]
+      },
+      {
+        "viewType": "openxlviewer-excel-editor",
+        "displayName": "Excel Editor",
+        "priority": "default",
+        "selector": [
+          {
+            "filenamePattern": "*.xlsx"
+          },
+          {
+            "filenamePattern": "*.xlsm"
+          }
+        ]
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "OpenXL Viewer",
+      "properties": {
+        "csv-preview.separator": {
+          "type": "string",
+          "default": ",",
+          "description": "Specifies the separator used in a CSV file (normally , but also ; is common)."
+        },
+        "csv-preview.quoteMark": {
+          "type": "string",
+          "default": "\"",
+          "description": "Specifies the optional character used to surround individual values in a CSV file."
+        },
+        "csv-preview.hasHeaders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Specifies whether the first row in a CSV file represents column headers."
+        },
+        "csv-preview.capitalizeHeaders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Specifies whether column headers in CSV files are capitalized."
+        },
+        "csv-preview.resizeColumns": {
+          "type": "string",
+          "enum": [
+            "all",
+            "first",
+            "none"
+          ],
+          "default": "none",
+          "description": "Specifies whether columns are automatically resized to fit the data for CSV files."
+        },
+        "csv-preview.lineNumbers": {
+          "type": "string",
+          "enum": [
+            "none",
+            "ordinal",
+            "source"
+          ],
+          "default": "none",
+          "description": "Specifies whether to display line numbers for CSV files."
+        },
+        "csv-preview.commentCharacter": {
+          "type": "string",
+          "default": "#",
+          "description": "Specifies the character used to mark comment lines in CSV files."
+        },
+        "csv-preview.skipComments": {
+          "type": "boolean",
+          "default": false,
+          "description": "Specifies whether lines that begin with the comment character should be omitted from the CSV preview."
+        },
+        "csv-preview.formatValues": {
+          "type": "string",
+          "enum": [
+            "always",
+            "never",
+            "unquoted"
+          ],
+          "default": "always",
+          "description": "Specifies whether to format numeric values in CSV files, or to treat them as strings."
+        },
+        "csv-preview.numberFormat": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Optional [.NET-style format string](https://docs.microsoft.com/en-us/dotnet/standard/base-types/standard-numeric-format-strings) used to display numeric values in CSV files (for example `n2`, `f1`, `p0`; `g2` shows 2 significant digits, so 12345 appears as 12000). Leave empty to show numbers unchanged. Only applies when `formatValues` formats numbers; the file is never modified."
+        },
+        "csv-preview.openStdin": {
+          "type": "boolean",
+          "default": false,
+          "description": "Specifies whether text piped to stdin is automatically opened as a CSV preview."
+        }
+      }
     }
+  },
+  "scripts": {
+    "vscode:prepublish": "webpack --mode production",
+    "compile": "webpack --mode none",
+    "watch": "webpack --mode none --watch",
+    "package": "vsce package --no-dependencies -o openxlviewer.vsix",
+    "test": "node --test test/*.test.js",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "@types/node": "^11.15.54",
+    "@types/vscode": "^1.60.0",
+    "@types/webpack-env": "^1.16.2",
+    "@vscode/vsce": "^3.0.0",
+    "assert": "^2.0.0",
+    "eslint": "^9.39.5",
+    "globals": "^17.13.0",
+    "prettier": "^3.9.10",
+    "process": "^0.11.10",
+    "ts-loader": "^9.2.5",
+    "typescript": "^4.4.3",
+    "webpack": "^5.52.1",
+    "webpack-cli": "^4.8.0",
+    "xlsx": "^0.18.5"
+  },
+  "dependencies": {
+    "path-browserify": "^1.0.1",
+    "vscode-uri": "^3.0.2"
+  }
 }
