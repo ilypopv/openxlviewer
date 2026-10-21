@@ -42,10 +42,17 @@ export function buildTextOps(doc: DocShape, eol: string, edits: LineEdit[]): Tex
         if (e.start >= L) {
             const body = norm(e.text);
             if (tail) {
-                const sep = tail.text.length === 0 ? (tail.eaten ? eol : '') : (tail.text.endsWith(eol) ? '' : eol);
+                const sep = tail.text.length === 0 ? (tail.eaten ? eol : '') : tail.text.endsWith(eol) ? '' : eol;
                 tail.text += sep + body;
             } else {
-                tail = { sl: L - 1, sc: lastLen, el: L - 1, ec: lastLen, text: (unterminated ? eol : '') + body, eof: true };
+                tail = {
+                    sl: L - 1,
+                    sc: lastLen,
+                    el: L - 1,
+                    ec: lastLen,
+                    text: (unterminated ? eol : '') + body,
+                    eof: true
+                };
                 ops.push(tail);
             }
             continue;
