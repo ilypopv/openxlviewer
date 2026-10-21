@@ -252,7 +252,7 @@ export default class ExcelDocumentView extends BaseDocumentView {
     }
 
     get viewType(): string {
-        return 'openxlviewer-excel-preview';
+        return 'xl-excel-preview';
     }
 
     get configurable(): boolean {
