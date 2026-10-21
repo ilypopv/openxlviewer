@@ -25,14 +25,14 @@ If the older "Spreadsheet Viewer" extension is installed, disable it so the two 
 - **Excel files** open in the Excel Editor automatically.
 - **CSV / TSV**: right-click the file, choose **Open With...**, then **CSV Editor**. For a read-only view run `CSV: Open Preview` (`Shift+Cmd/Ctrl+V`).
 
-| Action | Shortcut |
-| --- | --- |
-| Edit cell | type, or `F2` |
-| Find | `Ctrl/Cmd+F` |
-| Go to cell | `Ctrl/Cmd+G` |
+| Action            | Shortcut                    |
+| ----------------- | --------------------------- |
+| Edit cell         | type, or `F2`               |
+| Find              | `Ctrl/Cmd+F`                |
+| Go to cell        | `Ctrl/Cmd+G`                |
 | Fill down / right | `Ctrl/Cmd+D` / `Ctrl/Cmd+R` |
-| Zoom | `Ctrl/Cmd` + mouse wheel |
-| Sort or filter | right-click a column header |
+| Zoom              | `Ctrl/Cmd` + mouse wheel    |
+| Sort or filter    | right-click a column header |
 
 ## Limitations
 
