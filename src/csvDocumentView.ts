@@ -366,7 +366,7 @@ export default class CsvDocumentView extends BaseDocumentView {
     }
 
     get viewType(): string {
-        return 'openxlviewer-csv-preview';
+        return 'xl-csv-preview';
     }
 
     get configurable(): boolean {
