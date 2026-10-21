@@ -5,12 +5,17 @@ function initPage() {
     const options = getOptions();
     const STATE_VERSION = '6';
     const readOnly = !options.customEditor;
-    sendMessage = function (m) { vscode.postMessage(m); };
+    sendMessage = function (m) {
+        vscode.postMessage(m);
+    };
 
     const app = document.getElementById('app');
-    let provider = null, shell = null, sepSent = false;
+    let provider = null,
+        shell = null,
+        sepSent = false;
     // docVersion: document version the displayed rows were computed from (echoed with edits); transferring: a chunked refresh is in flight
-    let docVersion = null, transferring = false;
+    let docVersion = null,
+        transferring = false;
 
     const saved = (function () {
         if (ignoreState()) return null;
@@ -20,33 +25,41 @@ function initPage() {
 
     function measure(text) {
         let c = measure.ctx;
-        if (!c) { c = measure.ctx = document.createElement('canvas').getContext('2d'); c.font = '13px system-ui'; }
+        if (!c) {
+            c = measure.ctx = document.createElement('canvas').getContext('2d');
+            c.font = '13px system-ui';
+        }
         return c.measureText(text).width;
     }
 
     shell = new OX.Shell(app, {
         readOnly: readOnly,
         tabs: false,
-        headerRows: function () { return provider ? provider.frozenRows : 0; },
+        headerRows: function () {
+            return provider ? provider.frozenRows : 0;
+        },
         onEdit: applyEdits,
         onViewState: function (vs) {
             const state = { version: STATE_VERSION, uri: options.uri, view: vs };
             vscode.setState(state);
             vscode.postMessage({ save: true, state: state });
         },
-        onLink: function () { }
+        onLink: function () {}
     });
 
     if (!readOnly) {
         const add = document.createElement('button');
-        add.className = 'ox-btn ox-add'; add.textContent = 'Add row'; add.title = 'Append a row at the end';
+        add.className = 'ox-btn ox-add';
+        add.textContent = 'Add row';
+        add.title = 'Append a row at the end';
         add.addEventListener('click', addRow);
         shell.bar.insertBefore(add, shell.btnClear);
         shell.grid.on('contextmenu', onRowMenu);
     }
 
     function sourceRows(view) {
-        const order = shell._order, rows = new Set();
+        const order = shell._order,
+            rows = new Set();
         for (const rg of view.ranges) {
             const r2 = Math.min(rg.r2, (order ? order.length : provider.rowCount) - 1);
             for (let r = rg.r1; r <= r2; r++) rows.add(order ? order[r] : r);
@@ -58,14 +71,33 @@ function initPage() {
         if (e.zone !== 'rowhdr' || !provider) return;
         e.handled = true;
         const sel = shell.grid.getSelection();
-        const rows = sourceRows(sel).filter(function (r) { return !(provider.hasHeaders && r === 0); });
+        const rows = sourceRows(sel).filter(function (r) {
+            return !(provider.hasHeaders && r === 0);
+        });
         const g = shell.grid;
-        g._showMenu([
-            ['Copy', '', function () { g.copy(false); }],
-            null,
-            ['Delete ' + (rows.length > 1 ? rows.length + ' rows' : 'row'), '', function () { deleteRows(rows); }, !rows.length],
-            ['Add row at end', '', addRow]
-        ], e.clientX, e.clientY);
+        g._showMenu(
+            [
+                [
+                    'Copy',
+                    '',
+                    function () {
+                        g.copy(false);
+                    }
+                ],
+                null,
+                [
+                    'Delete ' + (rows.length > 1 ? rows.length + ' rows' : 'row'),
+                    '',
+                    function () {
+                        deleteRows(rows);
+                    },
+                    !rows.length
+                ],
+                ['Add row at end', '', addRow]
+            ],
+            e.clientX,
+            e.clientY
+        );
     }
 
     function post(edits) {
@@ -89,28 +121,45 @@ function initPage() {
 
     function applyEdits(edits) {
         if (readOnly || !provider || busy()) return;
-        const p = provider, changed = new Map(), appended = [];
+        const p = provider,
+            changed = new Map(),
+            appended = [];
         let maxR = -1;
-        edits.forEach(function (e) { if (e.r > maxR) maxR = e.r; });
+        edits.forEach(function (e) {
+            if (e.r > maxR) maxR = e.r;
+        });
         const startCount = p.rowCount;
         const viewActive = !!shell._order;
         while (p.rowCount <= maxR) {
             const r = p.appendRow();
             appended.push({ r: r, range: p.getSourceRange(r) });
         }
-        const ordered = edits.filter(function (e) { return e.r >= startCount || p.getRaw(e.r, e.c) !== e.text; });
+        const ordered = edits.filter(function (e) {
+            return e.r >= startCount || p.getRaw(e.r, e.c) !== e.text;
+        });
         const lineEdits = [];
         ordered.forEach(function (e) {
             if (e.r < startCount && !changed.has(e.r)) changed.set(e.r, p.getSourceRange(e.r));
         });
-        ordered.forEach(function (e) { p.setCell(e.r, e.c, e.text); });
-        changed.forEach(function (range, r) { lineEdits.push({ start: range.start, end: range.end, text: p.serializeRow(r) }); });
+        ordered.forEach(function (e) {
+            p.setCell(e.r, e.c, e.text);
+        });
+        changed.forEach(function (range, r) {
+            lineEdits.push({ start: range.start, end: range.end, text: p.serializeRow(r) });
+        });
         if (appended.length) {
-            const text = appended.map(function (a) { return p.serializeRow(a.r); }).join('\n');
+            const text = appended
+                .map(function (a) {
+                    return p.serializeRow(a.r);
+                })
+                .join('\n');
             lineEdits.push({ start: appended[0].range.start, end: appended[0].range.start, text: text });
         }
         // New rows are not part of a sort/filter order; drop the view so they are visible.
-        if (appended.length && viewActive) { shell.clearView(); shell.setMessage('Sort/filter cleared: rows were added'); }
+        if (appended.length && viewActive) {
+            shell.clearView();
+            shell.setMessage('Sort/filter cleared: rows were added');
+        }
         shell.grid.invalidate();
         shell.grid.refresh();
         shell._updateAll();
@@ -134,7 +183,8 @@ function initPage() {
         const merged = [];
         ranges.forEach(function (g) {
             const last = merged[merged.length - 1];
-            if (last && last.end === g.start) last.end = g.end; else merged.push({ start: g.start, end: g.end, text: '' });
+            if (last && last.end === g.start) last.end = g.end;
+            else merged.push({ start: g.start, end: g.end, text: '' });
         });
         post(merged);
         shell.clearView();
@@ -142,11 +192,27 @@ function initPage() {
         shell.grid.refresh();
     }
 
-    const later = typeof MessageChannel !== 'undefined' && typeof window !== 'undefined' && window.addEventListener
-        ? (function () { const ch = new MessageChannel(), q = []; ch.port1.onmessage = function () { const f = q.shift(); if (f) f(); }; return function (fn) { q.push(fn); ch.port2.postMessage(0); }; })()
-        : function (fn) { setTimeout(fn, 0); };
-    const SYNC_LIMIT = 4000000, FIRST_ROWS = 2000;
-    let job = null, enc = null;
+    const later =
+        typeof MessageChannel !== 'undefined' && typeof window !== 'undefined' && window.addEventListener
+            ? (function () {
+                  const ch = new MessageChannel(),
+                      q = [];
+                  ch.port1.onmessage = function () {
+                      const f = q.shift();
+                      if (f) f();
+                  };
+                  return function (fn) {
+                      q.push(fn);
+                      ch.port2.postMessage(0);
+                  };
+              })()
+            : function (fn) {
+                  setTimeout(fn, 0);
+              };
+    const SYNC_LIMIT = 4000000,
+        FIRST_ROWS = 2000;
+    let job = null,
+        enc = null;
 
     function parseOptions() {
         return {
@@ -163,10 +229,23 @@ function initPage() {
         transferring = id !== null && id !== undefined;
         const prevProvider = provider;
         job = {
-            id: id, seq: 0, cancelled: false, final: false, pumping: false, swapped: false, sync: false,
-            buf: new Uint8Array(Math.max(1024, expectedChars | 0)), filled: 0, expected: expectedChars | 0,
-            ix: new OX.CsvIndex(parseOptions()), t0: performance.now(), lastPos: -1, lastInv: 0,
-            prev: prevProvider ? shell.getViewState() : null, prevProvider: prevProvider, state0: null
+            id: id,
+            seq: 0,
+            cancelled: false,
+            final: false,
+            pumping: false,
+            swapped: false,
+            sync: false,
+            buf: new Uint8Array(Math.max(1024, expectedChars | 0)),
+            filled: 0,
+            expected: expectedChars | 0,
+            ix: new OX.CsvIndex(parseOptions()),
+            t0: performance.now(),
+            lastPos: -1,
+            lastInv: 0,
+            prev: prevProvider ? shell.getViewState() : null,
+            prevProvider: prevProvider,
+            state0: null
         };
         return job;
     }
@@ -177,9 +256,12 @@ function initPage() {
         while (pos < text.length) {
             const rest = pos ? text.slice(pos) : text;
             const r = enc.encodeInto(rest, j.buf.subarray(j.filled));
-            j.filled += r.written; pos += r.read;
+            j.filled += r.written;
+            pos += r.read;
             if (r.read < rest.length) {
-                const nb = new Uint8Array(Math.max(Math.ceil(j.buf.length * 1.2), j.filled + (rest.length - r.read) + 65536));
+                const nb = new Uint8Array(
+                    Math.max(Math.ceil(j.buf.length * 1.2), j.filled + (rest.length - r.read) + 65536)
+                );
                 nb.set(j.buf.subarray(0, j.filled));
                 j.buf = nb;
             }
@@ -200,11 +282,17 @@ function initPage() {
             dark: shell.isDark(),
             measure: measure
         });
-        if (j.prevProvider) j.prevProvider._userWidths.forEach(function (w, c) { provider.setColWidth(c, w); });
+        if (j.prevProvider)
+            j.prevProvider._userWidths.forEach(function (w, c) {
+                provider.setColWidth(c, w);
+            });
         shell.setProvider(provider);
         j.swapped = true;
         if (ix.done) autosize();
-        if (ix.sepDirective && !sepSent) { sepSent = true; sendMessage({ separator: ix.sepDirective }); }
+        if (ix.sepDirective && !sepSent) {
+            sepSent = true;
+            sendMessage({ separator: ix.sepDirective });
+        }
         const vs = j.prev || (saved && saved.view) || null;
         shell.applyViewState(vs);
         j.state0 = JSON.stringify(shell.getViewState());
@@ -214,11 +302,24 @@ function initPage() {
     function status(j, done) {
         if (done) {
             const n = provider.rowCount - (provider.hasHeaders ? 1 : 0);
-            shell.setMessage(n.toLocaleString() + ' rows, ' + provider.colCount + ' columns  |  parsed in ' + Math.round(performance.now() - j.t0) + ' ms');
+            shell.setMessage(
+                n.toLocaleString() +
+                    ' rows, ' +
+                    provider.colCount +
+                    ' columns  |  parsed in ' +
+                    Math.round(performance.now() - j.t0) +
+                    ' ms'
+            );
         } else {
             const total = j.final ? j.filled : Math.max(j.expected, j.filled);
-            const pct = total ? Math.min(99, Math.floor(100 * j.ix.pos / total)) : 0;
-            shell.setMessage('Parsing ' + pct + '%  |  ' + Math.max(0, provider ? provider.rowCount - (provider.hasHeaders ? 1 : 0) : 0).toLocaleString() + ' rows');
+            const pct = total ? Math.min(99, Math.floor((100 * j.ix.pos) / total)) : 0;
+            shell.setMessage(
+                'Parsing ' +
+                    pct +
+                    '%  |  ' +
+                    Math.max(0, provider ? provider.rowCount - (provider.hasHeaders ? 1 : 0) : 0).toLocaleString() +
+                    ' rows'
+            );
         }
     }
 
@@ -231,7 +332,9 @@ function initPage() {
     function complete(j) {
         provider.sync();
         if (j.prevProvider && j.prevProvider.dataRowCount === provider.dataRowCount) {
-            j.prevProvider._userHeights.forEach(function (h, r) { provider.setRowHeight(r, h); });
+            j.prevProvider._userHeights.forEach(function (h, r) {
+                provider.setRowHeight(r, h);
+            });
         }
         shell.loading = false;
         transferring = false;
@@ -257,23 +360,41 @@ function initPage() {
         } else if (j.swapped) {
             provider.sync();
             const t = performance.now();
-            if (!ix.done && t - j.lastInv > 300) { j.lastInv = t; shell.grid.invalidate(); }
+            if (!ix.done && t - j.lastInv > 300) {
+                j.lastInv = t;
+                shell.grid.invalidate();
+            }
         }
-        if (ix.done) { complete(j); return; }
+        if (ix.done) {
+            complete(j);
+            return;
+        }
         status(j, false);
-        if (ix.pos !== j.lastPos) { j.lastPos = ix.pos; later(function () { step(j); }); } else j.pumping = false;
+        if (ix.pos !== j.lastPos) {
+            j.lastPos = ix.pos;
+            later(function () {
+                step(j);
+            });
+        } else j.pumping = false;
     }
 
     function pump(j) {
         if (j.pumping || j.cancelled) return;
-        j.pumping = true; j.lastPos = -1;
-        later(function () { step(j); });
+        j.pumping = true;
+        j.lastPos = -1;
+        later(function () {
+            step(j);
+        });
     }
 
     function finishLoad(j) {
         j.final = true;
         j.ix.setSource(j.buf, j.filled, true);
-        if (j.filled <= SYNC_LIMIT) { j.sync = true; j.pumping = true; step(j); } else pump(j);
+        if (j.filled <= SYNC_LIMIT) {
+            j.sync = true;
+            j.pumping = true;
+            step(j);
+        } else pump(j);
     }
 
     // Whole document as one string (small files, tests, tools).
@@ -282,23 +403,42 @@ function initPage() {
         const j = beginLoad(0, null);
         j.version = version;
         enc = enc || new TextEncoder();
-        j.buf = enc.encode(text); j.filled = j.buf.length; j.expected = j.filled;
+        j.buf = enc.encode(text);
+        j.filled = j.buf.length;
+        j.expected = j.filled;
         finishLoad(j);
     }
 
     // Large documents arrive as ordered chunks: {refreshChunk:'start'|'data'|'end', id, ...}; a newer start cancels the old transfer.
     function chunk(m) {
-        if (m.refreshChunk === 'start') { beginLoad(m.chars, m.id).version = m.version; shell.setMessage('Loading...'); return; }
+        if (m.refreshChunk === 'start') {
+            beginLoad(m.chars, m.id).version = m.version;
+            shell.setMessage('Loading...');
+            return;
+        }
         const j = job;
         if (!j || j.id !== m.id || j.final) return;
         if (m.refreshChunk === 'data') {
-            if (m.seq !== j.seq) { j.cancelled = true; job = null; transferring = false; vscode.postMessage({ refresh: true }); return; }
+            if (m.seq !== j.seq) {
+                j.cancelled = true;
+                job = null;
+                transferring = false;
+                vscode.postMessage({ refresh: true });
+                return;
+            }
             j.seq++;
             feed(j, m.text);
-            if (!j.swapped) shell.setMessage('Loading ' + Math.floor(100 * j.filled / Math.max(1, j.expected)) + '%...');
+            if (!j.swapped)
+                shell.setMessage('Loading ' + Math.floor((100 * j.filled) / Math.max(1, j.expected)) + '%...');
             pump(j);
         } else if (m.refreshChunk === 'end') {
-            if (m.count !== j.seq) { j.cancelled = true; job = null; transferring = false; vscode.postMessage({ refresh: true }); return; }
+            if (m.count !== j.seq) {
+                j.cancelled = true;
+                job = null;
+                transferring = false;
+                vscode.postMessage({ refresh: true });
+                return;
+            }
             finishLoad(j);
         }
     }
