@@ -1,8 +1,8 @@
 {
-  "name": "openxlviewer",
-  "displayName": "OpenXL Viewer",
+  "name": "xl",
+  "displayName": "xl",
   "description": "View and edit CSV, TSV and XLSX files in VS Code.",
-  "version": "2.0.2",
+  "version": "1.0.0",
   "publisher": "ilypopv",
   "icon": "img/icon.png",
   "author": {
@@ -12,12 +12,12 @@
   "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
-    "url": "https://github.com/ilypopv/openxlviewer.git"
+    "url": "https://github.com/ilypopv/xl.git"
   },
   "bugs": {
-    "url": "https://github.com/ilypopv/openxlviewer/issues"
+    "url": "https://github.com/ilypopv/xl/issues"
   },
-  "homepage": "https://github.com/ilypopv/openxlviewer#readme",
+  "homepage": "https://github.com/ilypopv/xl#readme",
   "engines": {
     "vscode": "^1.63.0"
   },
@@ -39,10 +39,10 @@
     "onLanguage:csv",
     "onLanguage:tsv",
     "onLanguage:excel",
-    "onWebviewPanel:openxlviewer-csv-preview",
-    "onWebviewPanel:openxlviewer-excel-preview",
-    "onCustomEditor:openxlviewer-csv-editor",
-    "onCustomEditor:openxlviewer-excel-editor"
+    "onWebviewPanel:xl-csv-preview",
+    "onWebviewPanel:xl-excel-preview",
+    "onCustomEditor:xl-csv-editor",
+    "onCustomEditor:xl-excel-editor"
   ],
   "main": "./dist/extension",
   "browser": "./dist/extension",
@@ -243,7 +243,7 @@
     ],
     "customEditors": [
       {
-        "viewType": "openxlviewer-csv-editor",
+        "viewType": "xl-csv-editor",
         "displayName": "CSV Editor",
         "priority": "option",
         "selector": [
@@ -259,7 +259,7 @@
         ]
       },
       {
-        "viewType": "openxlviewer-excel-editor",
+        "viewType": "xl-excel-editor",
         "displayName": "Excel Editor",
         "priority": "default",
         "selector": [
@@ -274,7 +274,7 @@
     ],
     "configuration": {
       "type": "object",
-      "title": "OpenXL Viewer",
+      "title": "xl",
       "properties": {
         "csv-preview.separator": {
           "type": "string",
@@ -353,7 +353,7 @@
     "vscode:prepublish": "webpack --mode production",
     "compile": "webpack --mode none",
     "watch": "webpack --mode none --watch",
-    "package": "vsce package --no-dependencies -o openxlviewer.vsix",
+    "package": "vsce package --no-dependencies -o xl.vsix",
     "test": "node --test test/*.test.js",
     "lint": "eslint .",
     "format": "prettier --write .",
