@@ -1,0 +1,7 @@
+dist
+node_modules
+out/vendor
+docs
+*.vsix
+package-lock.json
+CLAUDE.md
