@@ -73,12 +73,8 @@ export function activate(context: ExtensionContext) {
     context.subscriptions.push(ExcelEditorProvider.register(context));
 
     // Register serializers for persistent settings
-    context.subscriptions.push(
-        window.registerWebviewPanelSerializer('openxlviewer-csv-preview', new CsvSerializer(context))
-    );
-    context.subscriptions.push(
-        window.registerWebviewPanelSerializer('openxlviewer-excel-preview', new ExcelSerializer(context))
-    );
+    context.subscriptions.push(window.registerWebviewPanelSerializer('xl-csv-preview', new CsvSerializer(context)));
+    context.subscriptions.push(window.registerWebviewPanelSerializer('xl-excel-preview', new ExcelSerializer(context)));
 
     // Reset all previews when the configuration changes
     context.subscriptions.push(
