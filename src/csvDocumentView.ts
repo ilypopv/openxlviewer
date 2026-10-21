@@ -1,5 +1,15 @@
 'use strict';
-import { window, workspace, WebviewPanel, ExtensionContext, ViewColumn, WorkspaceEdit, TextDocument, EndOfLine, Range } from 'vscode';
+import {
+    window,
+    workspace,
+    WebviewPanel,
+    ExtensionContext,
+    ViewColumn,
+    WorkspaceEdit,
+    TextDocument,
+    EndOfLine,
+    Range
+} from 'vscode';
 import { URI } from 'vscode-uri';
 import BaseDocumentView from './baseDocumentView';
 import { LineEdit, buildTextOps } from './csvLineEdits';
@@ -18,10 +28,9 @@ const INLINE_CHARS = 4 * 1024 * 1024;
 const CHUNK_CHARS = 1024 * 1024;
 
 export default class CsvDocumentView extends BaseDocumentView {
-
     static create(context: ExtensionContext, uri: URI, viewColumn: ViewColumn): CsvDocumentView {
         let preview = new CsvDocumentView(context, uri);
-        preview.scheme = "csv-preview";
+        preview.scheme = 'csv-preview';
         preview.initWebviewPanel(viewColumn);
         preview.initialize();
         return preview;
@@ -29,7 +38,7 @@ export default class CsvDocumentView extends BaseDocumentView {
 
     static revive(context: ExtensionContext, uri: URI, webviewPanel: WebviewPanel): CsvDocumentView {
         let preview = new CsvDocumentView(context, uri);
-        preview.scheme = "csv-preview";
+        preview.scheme = 'csv-preview';
         preview.attachWebviewPanel(webviewPanel);
         preview.initialize();
         return preview;
@@ -48,7 +57,7 @@ export default class CsvDocumentView extends BaseDocumentView {
 
     public getOptions(): any {
         let config = workspace.getConfiguration('csv-preview');
-        let sep = cleanString(config.get("separator"), ",", 8);
+        let sep = cleanString(config.get('separator'), ',', 8);
         let lang = this.languageId;
         if (!lang) {
             let document = workspace.textDocuments.find(d => d.uri.toString() === this.uri.toString());
@@ -58,11 +67,11 @@ export default class CsvDocumentView extends BaseDocumentView {
             }
         }
         if (lang === 'tsv') {
-            sep = "\t";
+            sep = '\t';
         } else if (lang === 'csv (semicolon)') {
-            sep = ";";
+            sep = ';';
         } else if (lang === 'csv (pipe)') {
-            sep = "|";
+            sep = '|';
         }
         if (this.separator) {
             sep = this.separator;
@@ -70,15 +79,15 @@ export default class CsvDocumentView extends BaseDocumentView {
         return {
             separator: sep,
             languageId: typeof lang === 'string' ? lang.slice(0, 64) : lang,
-            quoteMark: cleanString(config.get("quoteMark"), '"', 1),
-            hasHeaders: config.get("hasHeaders") === true,
-            capitalizeHeaders: config.get("capitalizeHeaders") === true,
-            resizeColumns: cleanEnum(config.get("resizeColumns"), ['all', 'first', 'none'], 'none'),
-            lineNumbers: cleanEnum(config.get("lineNumbers"), ['none', 'ordinal', 'source'], 'none'),
-            commentCharacter: cleanString(config.get("commentCharacter"), '#', 4),
-            skipComments: config.get("skipComments") === true,
-            formatValues: cleanEnum(config.get("formatValues"), ['always', 'never', 'unquoted'], 'always'),
-            numberFormat: cleanString(config.get("numberFormat"), '', 64, 0),
+            quoteMark: cleanString(config.get('quoteMark'), '"', 1),
+            hasHeaders: config.get('hasHeaders') === true,
+            capitalizeHeaders: config.get('capitalizeHeaders') === true,
+            resizeColumns: cleanEnum(config.get('resizeColumns'), ['all', 'first', 'none'], 'none'),
+            lineNumbers: cleanEnum(config.get('lineNumbers'), ['none', 'ordinal', 'source'], 'none'),
+            commentCharacter: cleanString(config.get('commentCharacter'), '#', 4),
+            skipComments: config.get('skipComments') === true,
+            formatValues: cleanEnum(config.get('formatValues'), ['always', 'never', 'unquoted'], 'always'),
+            numberFormat: cleanString(config.get('numberFormat'), '', 64, 0),
             customEditor: this.hasCustomEditor,
             uri: this.uri.toString(),
             previewUri: this.previewUri.toString(),
@@ -88,35 +97,44 @@ export default class CsvDocumentView extends BaseDocumentView {
 
     public initialize() {
         super.initialize();
-        workspace.onDidChangeTextDocument((e) => {
-            if (this._disposed || e.document.uri.toString() !== this.uri.toString()) {
-                return;
-            }
-            if (this._inflight) {
-                this._seenVersions.push(e.document.version);
-                return;
-            }
-            if (e.contentChanges.length === 0) {
-                return;
-            }
-            this._viewVersion = -1;
-            this.scheduleRefresh();
-        }, this, this._disposables);
+        workspace.onDidChangeTextDocument(
+            e => {
+                if (this._disposed || e.document.uri.toString() !== this.uri.toString()) {
+                    return;
+                }
+                if (this._inflight) {
+                    this._seenVersions.push(e.document.version);
+                    return;
+                }
+                if (e.contentChanges.length === 0) {
+                    return;
+                }
+                this._viewVersion = -1;
+                this.scheduleRefresh();
+            },
+            this,
+            this._disposables
+        );
     }
 
     public enableEditing(document: TextDocument) {
         this._document = document;
-        this.webview.onDidReceiveMessage((e) => {
-            if (!e || typeof e !== 'object') {
-                return;
-            }
-            if (e.lineEdits !== undefined) {
-                const edits = e.lineEdits, version = e.version;
-                this.enqueue(() => this.applyLineEdits(edits, version));
-            } else if (typeof e.separator === 'string' && e.separator.length >= 1 && e.separator.length <= 8) {
-                this.separator = e.separator;
-            }
-        }, this, this._disposables);
+        this.webview.onDidReceiveMessage(
+            e => {
+                if (!e || typeof e !== 'object') {
+                    return;
+                }
+                if (e.lineEdits !== undefined) {
+                    const edits = e.lineEdits,
+                        version = e.version;
+                    this.enqueue(() => this.applyLineEdits(edits, version));
+                } else if (typeof e.separator === 'string' && e.separator.length >= 1 && e.separator.length <= 8) {
+                    this.separator = e.separator;
+                }
+            },
+            this,
+            this._disposables
+        );
     }
 
     // All host-side document work is serialized so line numbers always refer to the state the webview assumes.
@@ -132,8 +150,16 @@ export default class CsvDocumentView extends BaseDocumentView {
         const out: LineEdit[] = [];
         let chars = 0;
         for (const e of edits) {
-            if (!e || typeof e.text !== 'string' || !Number.isInteger(e.start) || !Number.isInteger(e.end)
-                || e.start < 0 || e.end < e.start || e.start > lineCount || e.end > lineCount) {
+            if (
+                !e ||
+                typeof e.text !== 'string' ||
+                !Number.isInteger(e.start) ||
+                !Number.isInteger(e.end) ||
+                e.start < 0 ||
+                e.end < e.start ||
+                e.start > lineCount ||
+                e.end > lineCount
+            ) {
                 return undefined;
             }
             chars += e.text.length;
@@ -159,8 +185,8 @@ export default class CsvDocumentView extends BaseDocumentView {
             this.scheduleRefresh();
             return;
         }
-        const eol = doc.eol === EndOfLine.CRLF ? "\r\n" : "\n";
-        const ops = buildTextOps({ lineCount: doc.lineCount, lineLength: (i) => doc.lineAt(i).text.length }, eol, edits);
+        const eol = doc.eol === EndOfLine.CRLF ? '\r\n' : '\n';
+        const ops = buildTextOps({ lineCount: doc.lineCount, lineLength: i => doc.lineAt(i).text.length }, eol, edits);
         if (!ops.length) {
             this._viewVersion = -1;
             this.scheduleRefresh();
@@ -242,14 +268,16 @@ export default class CsvDocumentView extends BaseDocumentView {
     private async sendChunks(document: TextDocument, id: number, total: number) {
         const version = document.version;
         const lines = document.lineCount;
-        const eol = document.eol === EndOfLine.CRLF ? "\r\n" : "\n";
+        const eol = document.eol === EndOfLine.CRLF ? '\r\n' : '\n';
         const alive = () => !this._disposed && id === this._sendId;
         const post = async (m: any) => (await this.webview.postMessage(Object.assign({ id, version }, m))) !== false;
         this._viewVersion = version;
-        if (!await post({ refreshChunk: 'start', chars: total, lines })) {
+        if (!(await post({ refreshChunk: 'start', chars: total, lines }))) {
             return;
         }
-        let seq = 0, l0 = 0, perChunk = Math.max(1, Math.min(1000, Math.floor(CHUNK_CHARS * lines / Math.max(1, total))));
+        let seq = 0,
+            l0 = 0,
+            perChunk = Math.max(1, Math.min(1000, Math.floor((CHUNK_CHARS * lines) / Math.max(1, total))));
         while (l0 < lines) {
             if (!alive()) {
                 return;
@@ -260,29 +288,41 @@ export default class CsvDocumentView extends BaseDocumentView {
             }
             const l1 = Math.min(lines, l0 + perChunk);
             const lastChunk = l1 >= lines;
-            const text = document.getText(lastChunk
-                ? new Range(l0, 0, lines - 1, document.lineAt(lines - 1).text.length)
-                : new Range(l0, 0, l1, 0));
+            const text = document.getText(
+                lastChunk
+                    ? new Range(l0, 0, lines - 1, document.lineAt(lines - 1).text.length)
+                    : new Range(l0, 0, l1, 0)
+            );
             if (l1 - l0 === 1 && text.length > 2 * CHUNK_CHARS) {
                 // one enormous line: split it by characters, never inside a surrogate pair
                 const body = text.endsWith(eol) ? text.slice(0, text.length - eol.length) : text;
                 const tail = body.length === text.length ? '' : eol;
-                for (let a = 0; a < body.length; ) {
+                for (let a = 0; a < body.length;) {
                     let b = Math.min(body.length, a + CHUNK_CHARS);
                     const c = body.charCodeAt(b - 1);
                     if (b < body.length && c >= 0xd800 && c <= 0xdbff) {
                         b++;
                     }
-                    if (!alive() || !await post({ refreshChunk: 'data', seq: seq++, text: body.slice(a, b) + (b >= body.length ? tail : '') })) {
+                    if (
+                        !alive() ||
+                        !(await post({
+                            refreshChunk: 'data',
+                            seq: seq++,
+                            text: body.slice(a, b) + (b >= body.length ? tail : '')
+                        }))
+                    ) {
                         return;
                     }
                     a = b;
                 }
             } else {
-                if (!await post({ refreshChunk: 'data', seq: seq++, text })) {
+                if (!(await post({ refreshChunk: 'data', seq: seq++, text }))) {
                     return;
                 }
-                perChunk = Math.max(1, Math.min(1000000, Math.floor(perChunk * CHUNK_CHARS / Math.max(1, text.length))));
+                perChunk = Math.max(
+                    1,
+                    Math.min(1000000, Math.floor((perChunk * CHUNK_CHARS) / Math.max(1, text.length)))
+                );
             }
             l0 = l1;
         }
@@ -326,7 +366,7 @@ export default class CsvDocumentView extends BaseDocumentView {
     }
 
     get viewType(): string {
-        return "openxlviewer-csv-preview";
+        return 'openxlviewer-csv-preview';
     }
 
     get configurable(): boolean {
