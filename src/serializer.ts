@@ -29,9 +29,7 @@ async function restore(context: ExtensionContext, panel: WebviewPanel, state: an
 }
 
 export class CsvSerializer implements WebviewPanelSerializer {
-
-    constructor(private readonly context: ExtensionContext) {
-    }
+    constructor(private readonly context: ExtensionContext) {}
 
     public async deserializeWebviewPanel(webviewPanel: WebviewPanel, state: any) {
         await restore(this.context, webviewPanel, state, CsvDocumentView.revive);
@@ -39,9 +37,7 @@ export class CsvSerializer implements WebviewPanelSerializer {
 }
 
 export class ExcelSerializer implements WebviewPanelSerializer {
-
-    constructor(private readonly context: ExtensionContext) {
-    }
+    constructor(private readonly context: ExtensionContext) {}
 
     public async deserializeWebviewPanel(webviewPanel: WebviewPanel, state: any) {
         await restore(this.context, webviewPanel, state, ExcelDocumentView.revive);
