@@ -189,7 +189,7 @@ function initPage() {
             '": ' +
             (err && err.message ? err.message : err);
         shell.setMessage(msg);
-        sendMessage({ error: 'OpenXL Viewer: ' + msg });
+        sendMessage({ error: 'xl: ' + msg });
     }
 
     function setCancel(fn) {
@@ -315,7 +315,7 @@ function initPage() {
             shell.setMessage(
                 (reloading ? 'Cannot reload file (keeping the previous content): ' : 'Cannot open file: ') + why
             );
-            sendMessage({ error: 'OpenXL Viewer: ' + why });
+            sendMessage({ error: 'xl: ' + why });
             return;
         }
         bytes = nbytes;
